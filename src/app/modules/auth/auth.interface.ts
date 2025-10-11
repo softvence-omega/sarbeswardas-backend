@@ -1,7 +1,13 @@
 import { ObjectId } from "mongoose";
 
 export type TRole = "ADMIN" | "LEAD" | "MEMBER";
-export type TAccountStatus = "ACTIVE" | "INACTIVE" | "SUSPENDED";
+export type TAccountStatus = "ACTIVE" | "INACTIVE";
+export type TLoggedInDevice = {
+  deviceId: string;
+  userAgent?: string;
+  ip?: string;
+  loggedInAt?: Date;
+};
 
 export type TUser = {
   fullName: string;
@@ -9,7 +15,7 @@ export type TUser = {
   password: string;
   profileImage?: string;
   subscribedPlanId?: ObjectId;
-  loggedInDevice?: string[];
+  loggedInDevices?: TLoggedInDevice[];
   isVerified?: boolean;
   lastOTP?: string;
   isActive?: TAccountStatus;

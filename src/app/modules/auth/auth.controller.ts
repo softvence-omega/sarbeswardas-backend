@@ -4,7 +4,6 @@ import { sendResponse } from "../../utils/send_response";
 import { auth_service } from "./auth.service";
 
 const sign_up_user = catchAsync(async (req, res) => {
-
   const result = await auth_service.sign_up_user_into_db(req.body);
 
   sendResponse(res, {
@@ -20,7 +19,7 @@ const login_user = catchAsync(async (req, res) => {
     throw new AppError(404, "Payload not found");
   }
 
-  const result = await auth_service.login_user_into_db(req.body);
+  const result = await auth_service.login_user_into_db(req, req.body);
 
   sendResponse(res, {
     success: true,
@@ -31,11 +30,20 @@ const login_user = catchAsync(async (req, res) => {
 });
 
 const change_password = catchAsync(async (req, res) => {
+  const email = req.user?.email;
   if (!req.body) {
     throw new AppError(404, "Invalid request: payload is missing");
   }
 
-  await auth_service.change_password_into_db(req.body);
+  if (req.body.oldPassword === req.body.newPassword) {
+    throw new AppError(409, "oldPassword and newPassword must be different");
+  }
+  const payload = {
+    email,
+    ...req.body,
+  };
+
+  await auth_service.change_password_into_db(payload);
 
   sendResponse(res, {
     success: true,

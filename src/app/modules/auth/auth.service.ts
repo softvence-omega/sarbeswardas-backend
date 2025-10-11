@@ -1,4 +1,4 @@
-import { Secret } from "jsonwebtoken";
+import { v4 as uuidv4 } from "uuid";
 import config from "../../config";
 import { AppError } from "../../utils/app_error";
 import { jwtHelpers } from "../../utils/JWT";
@@ -6,26 +6,30 @@ import { TUser } from "./auth.interface";
 import { User_Model } from "./auth.schema";
 import bcrypt from "bcrypt";
 import { sendEmail } from "../../utils/send_email";
-import jwt from "jsonwebtoken";
 import { OTPMaker } from "../../utils/otp_maker";
+import { Request } from "express";
+import { UAParser } from "ua-parser-js";
 
 const sign_up_user_into_db = async (payload: TUser) => {
-  const { email } = payload;
+  const { email, password } = payload;
 
   const isUserExist = await User_Model.findOne({ email });
   if (isUserExist) {
     throw new AppError(409, "Account already exist! Try with new email.");
   }
 
-  const hashedPassword = await bcrypt.hash(payload.password, 10);
+  const hashedPassword = await bcrypt.hash(password, 10);
   const modifiedData = { ...payload, password: hashedPassword };
 
-  await User_Model.create(modifiedData);
+  const updatedUser = await User_Model.create(modifiedData);
+  if (!updatedUser) {
+    throw new AppError(403, "Failed to create user");
+  }
 
   return "";
 };
 
-const login_user_into_db = async (payload: { email: string; password: string }) => {
+const login_user_into_db = async (req: Request, payload: { email: string; password: string }) => {
   const { email, password } = payload;
 
   const user = await User_Model.findOne({ email, isDeleted: false });
@@ -37,41 +41,46 @@ const login_user_into_db = async (payload: { email: string; password: string }) 
   const isPasswordMatch = await bcrypt.compare(password, user?.password as string);
 
   if (!isPasswordMatch) {
-    throw new AppError(403, "Invalid password!!");
+    throw new AppError(403, "Wrong password!!");
   }
 
+  const deviceId = uuidv4();
+  const userAgent = req.headers["user-agent"] || "Unknown";
+  let ip = req.ip || req.headers["x-forwarded-for"] || req.socket.remoteAddress;
+  if (Array.isArray(ip)) {
+    ip = ip[0];
+  }
+  if (typeof ip !== "string") {
+    ip = ip ? String(ip) : "Unknown";
+  }
+
+  // Parse device info 
+  const parser = new UAParser(userAgent);
+  const device = {
+    deviceId,
+    userAgent: `${parser.getBrowser().name} on ${parser.getOS().name}`,
+    ip,
+    loggedInAt: new Date(),
+  };
+  console.log({ device });
+
+  // Keep only last 2–3 devices
+  let updatedDevices = user.loggedInDevices || [];
+  updatedDevices.push(device);
+  if (updatedDevices.length > 3) {
+    // remove the oldest login
+    updatedDevices = updatedDevices.slice(updatedDevices.length - 3);
+  }
+
+  user.loggedInDevices = updatedDevices;
+  await user.save();
+
+  // Generate JWT including deviceId
   const accessToken = jwtHelpers.generateToken(
-    {
-      email: user?.email,
-      accountId: user?._id,
-    },
-    config.access_token_secret as Secret,
+    { email: user.email, deviceId },
+    config.access_token_secret as string,
     config.access_token_expires_in as string
   );
-
-  // Generate token valid for 1 hour
-  // const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET as string, {
-  //   expiresIn: "1h",
-  // });
-
-  // // Create verification link
-  // const verifyUrl = `${process.env.FRONTEND_URL}/verify-email?token=${token}`;
-
-  // // Email content
-  // const html = `
-  //   <div>
-  //     <h3>Welcome to Our App</h3>
-  //     <p>Click below to verify your email:</p>
-  //     <a href="${verifyUrl}"
-  //        style="background: #007bff; color: white; padding: 10px 20px;
-  //        text-decoration: none; border-radius: 4px;">
-  //        Verify Email
-  //     </a>
-  //   </div>
-  // `;
-
-  // // Send email
-  // await sendEmail(email, "Verify your email", html);
 
   return { accessToken };
 };
@@ -88,9 +97,9 @@ const change_password_into_db = async (payload: {
     throw new AppError(404, "User not found!!");
   }
 
-  const isPasswordMatch = bcrypt.compare(oldPassword, user.password);
+  const isPasswordMatch = await bcrypt.compare(oldPassword, user.password);
   if (!isPasswordMatch) {
-    throw new AppError(409, "Invalid password!!");
+    throw new AppError(409, "Wrong password!!");
   }
 
   const hashedNewPassword = await bcrypt.hash(newPassword, 10);
@@ -139,7 +148,7 @@ const forgot_password = async (emailInput: string | { email: string }) => {
 
   await sendEmail(email, "Your OTP", emailTemp);
 
-  return "Check your email for reset link";
+  return "Check your email for OTP";
 };
 
 const reset_password_into_db = async (email: string, otp: string, newPassword: string) => {
@@ -150,7 +159,6 @@ const reset_password_into_db = async (email: string, otp: string, newPassword: s
   if (!verifyOTP) {
     throw new AppError(409, "Invalid OTP");
   }
-
 
   const newHashedPassword = await bcrypt.hash(newPassword, 10);
   user.password = newHashedPassword;
@@ -170,3 +178,30 @@ export const auth_service = {
   forgot_password,
   reset_password_into_db,
 };
+
+
+
+
+  // Generate token valid for 1 hour
+  // const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET as string, {
+  //   expiresIn: "1h",
+  // });
+
+  // // Create verification link
+  // const verifyUrl = `${process.env.FRONTEND_URL}/verify-email?token=${token}`;
+
+  // // Email content
+  // const html = `
+  //   <div>
+  //     <h3>Welcome to Our App</h3>
+  //     <p>Click below to verify your email:</p>
+  //     <a href="${verifyUrl}"
+  //        style="background: #007bff; color: white; padding: 10px 20px;
+  //        text-decoration: none; border-radius: 4px;">
+  //        Verify Email
+  //     </a>
+  //   </div>
+  // `;
+
+  // // Send email
+  // await sendEmail(email, "Verify your email", html);
