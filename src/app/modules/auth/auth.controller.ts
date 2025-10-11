@@ -79,10 +79,26 @@ const reset_password = catchAsync(async (req, res) => {
   });
 });
 
+const logged_out_all_device = catchAsync(async (req, res) => {
+  const email = req.user?.email;
+  if (!email) {
+    throw new AppError(404, "Email not found from token");
+  }
+
+  await auth_service.logged_out_all_device_from_db(email);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: 200,
+    message: "All device logged out",
+  });
+});
+
 export const auth_controller = {
   sign_up_user,
   login_user,
   change_password,
   forgot_password,
   reset_password,
+  logged_out_all_device,
 };
