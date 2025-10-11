@@ -18,7 +18,7 @@ router.patch(
 
 router.post("/forgot-password", auth_controller.forgot_password);
 router.post("/reset-password", auth_controller.reset_password);
-
 router.get("/verify-email", verifyEmail);
+router.post("/log-out-all-device", auth(), auth_controller.logged_out_all_device);
 
 export const authRouter = router;

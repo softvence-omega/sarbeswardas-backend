@@ -9,6 +9,7 @@ import { sendEmail } from "../../utils/send_email";
 import { OTPMaker } from "../../utils/otp_maker";
 import { Request } from "express";
 import { UAParser } from "ua-parser-js";
+import { email } from "zod";
 
 const sign_up_user_into_db = async (payload: TUser) => {
   const { email, password } = payload;
@@ -54,7 +55,7 @@ const login_user_into_db = async (req: Request, payload: { email: string; passwo
     ip = ip ? String(ip) : "Unknown";
   }
 
-  // Parse device info 
+  // Parse device info
   const parser = new UAParser(userAgent);
   const device = {
     deviceId,
@@ -171,37 +172,51 @@ const reset_password_into_db = async (email: string, otp: string, newPassword: s
   return "";
 };
 
+const logged_out_all_device_from_db = async (email: string) => {
+  const user = await User_Model.findOne({ email, isDeleted: false });
+
+  if (!user) {
+    throw new AppError(404, "User not found");
+  }
+
+  user.loggedInDevices = [];
+  const updatedUser = await user.save();
+  if (!updatedUser) {
+    throw new AppError(500, "Failed to logged out from all device");
+  }
+
+  return "";
+};
+
 export const auth_service = {
   sign_up_user_into_db,
   login_user_into_db,
   change_password_into_db,
   forgot_password,
   reset_password_into_db,
+  logged_out_all_device_from_db,
 };
 
+// Generate token valid for 1 hour
+// const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET as string, {
+//   expiresIn: "1h",
+// });
 
+// // Create verification link
+// const verifyUrl = `${process.env.FRONTEND_URL}/verify-email?token=${token}`;
 
+// // Email content
+// const html = `
+//   <div>
+//     <h3>Welcome to Our App</h3>
+//     <p>Click below to verify your email:</p>
+//     <a href="${verifyUrl}"
+//        style="background: #007bff; color: white; padding: 10px 20px;
+//        text-decoration: none; border-radius: 4px;">
+//        Verify Email
+//     </a>
+//   </div>
+// `;
 
-  // Generate token valid for 1 hour
-  // const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET as string, {
-  //   expiresIn: "1h",
-  // });
-
-  // // Create verification link
-  // const verifyUrl = `${process.env.FRONTEND_URL}/verify-email?token=${token}`;
-
-  // // Email content
-  // const html = `
-  //   <div>
-  //     <h3>Welcome to Our App</h3>
-  //     <p>Click below to verify your email:</p>
-  //     <a href="${verifyUrl}"
-  //        style="background: #007bff; color: white; padding: 10px 20px;
-  //        text-decoration: none; border-radius: 4px;">
-  //        Verify Email
-  //     </a>
-  //   </div>
-  // `;
-
-  // // Send email
-  // await sendEmail(email, "Verify your email", html);
+// // Send email
+// await sendEmail(email, "Verify your email", html);
