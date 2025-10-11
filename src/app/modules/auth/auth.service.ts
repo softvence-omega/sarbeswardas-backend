@@ -43,7 +43,6 @@ const login_user_into_db = async (payload: { email: string; password: string }) 
   const accessToken = jwtHelpers.generateToken(
     {
       email: user?.email,
-      role: user?.role,
       accountId: user?._id,
     },
     config.access_token_secret as Secret,
