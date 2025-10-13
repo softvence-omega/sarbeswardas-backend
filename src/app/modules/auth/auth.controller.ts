@@ -1,5 +1,6 @@
 import { AppError } from "../../utils/app_error";
 import catchAsync from "../../utils/catch_async";
+import { uploadToCloudinary } from "../../utils/cloudinaryUploader";
 import { sendResponse } from "../../utils/send_response";
 import { auth_service } from "./auth.service";
 
