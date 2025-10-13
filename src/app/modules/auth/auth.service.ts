@@ -5,16 +5,24 @@ import { jwtHelpers } from "../../utils/JWT";
 import { TUser } from "./auth.interface";
 import { User_Model } from "./auth.schema";
 import bcrypt from "bcrypt";
-import { sendEmail } from "../../utils/send_email";
 import { OTPMaker } from "../../utils/otp_maker";
 import { Request } from "express";
 import { UAParser } from "ua-parser-js";
-import { email } from "zod";
-import { sendEmailWithResend } from "../../utils/resend_email_service";
 import { sendEmailWithBrevo } from "../../utils/sendEmailWithBrevo";
+import mongoose from "mongoose";
+
+interface GooglePayload {
+  email: string;
+  provider: string;
+  fullName: string;
+  photoUrl?: string;
+}
 
 const sign_up_user_into_db = async (payload: TUser) => {
   const { email, password } = payload;
+  if (!email || !password) {
+    throw new AppError(400, "Email or password missing");
+  }
 
   const isUserExist = await User_Model.findOne({ email });
   if (isUserExist) {
@@ -34,6 +42,10 @@ const sign_up_user_into_db = async (payload: TUser) => {
 
 const login_user_into_db = async (req: Request, payload: { email: string; password: string }) => {
   const { email, password } = payload;
+
+  if (!email || !password) {
+    throw new AppError(400, "Email or password missing");
+  }
 
   const user = await User_Model.findOne({ email, isDeleted: false });
 
@@ -95,12 +107,16 @@ const change_password_into_db = async (payload: {
 }) => {
   const { email, oldPassword, newPassword } = payload;
 
+  if (!email || !oldPassword || !newPassword) {
+    throw new AppError(400, "Email or oldPassword or newPassword missing");
+  }
+
   const user = await User_Model.findOne({ email, isDeleted: false, isVerified: true });
   if (!user) {
     throw new AppError(404, "User not found!!");
   }
 
-  const isPasswordMatch = await bcrypt.compare(oldPassword, user.password);
+  const isPasswordMatch = await bcrypt.compare(oldPassword, user.password!);
   if (!isPasswordMatch) {
     throw new AppError(409, "Wrong password!!");
   }
@@ -196,6 +212,69 @@ const logged_out_all_device_from_db = async (email: string) => {
   return "";
 };
 
+export const login_user_with_google_from_db = async (payload: GooglePayload) => {
+  if (!payload) {
+    throw new AppError(400, "Missing Google data");
+  }
+  //  Validate input early
+  if (!payload.email || !payload.provider || !payload.fullName) {
+    throw new AppError(400, "Missing required Google login data");
+  }
+
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    //  Find existing user
+    let user = await User_Model.findOne({ email: payload.email }).session(session);
+
+    //  If user doesn’t exist, create one
+    if (!user) {
+      const newUsers = await User_Model.create(
+        [
+          {
+            email: payload.email,
+            provider: payload.provider,
+            firstName: payload.fullName,
+            isVerified: true,
+            profileImage: payload.photoUrl || undefined,
+          },
+        ],
+        { session }
+      );
+
+      user = newUsers[0];
+    }
+
+    //  Commit transaction before using user
+    await session.commitTransaction();
+    session.endSession();
+
+    //  Post-checks after commit
+    if (!user) throw new AppError(404, "Account not found");
+    if (user.isDeleted) throw new AppError(403, "This account has been deleted");
+    if (user.isActive === "INACTIVE") throw new AppError(403, "This account is blocked");
+
+    //  Generate JWT
+    const accessToken = jwtHelpers.generateToken(
+      { email: user.email, userId: user._id },
+      config.access_token_secret as string,
+      config.access_token_expires_in as string
+    );
+
+    return {
+      success: true,
+      message: user ? "Login successful" : "Account created successfully",
+      accessToken,
+    };
+  } catch (error) {
+    // Rollback if any failure
+    await session.abortTransaction();
+    session.endSession();
+    throw new AppError(500, (error as Error).message || "Google login failed");
+  }
+};
+
 export const auth_service = {
   sign_up_user_into_db,
   login_user_into_db,
@@ -203,6 +282,7 @@ export const auth_service = {
   forgot_password,
   reset_password_into_db,
   logged_out_all_device_from_db,
+  login_user_with_google_from_db,
 };
 
 // Generate token valid for 1 hour

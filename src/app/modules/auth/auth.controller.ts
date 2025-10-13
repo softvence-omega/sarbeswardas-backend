@@ -95,6 +95,16 @@ const logged_out_all_device = catchAsync(async (req, res) => {
   });
 });
 
+const login_user_with_google = catchAsync(async (req, res) => {
+  const result = await auth_service.login_user_with_google_from_db(req?.body);
+  sendResponse(res, {
+    success: true,
+    statusCode: 200,
+    message: "Login Successful.",
+    data: result,
+  });
+});
+
 export const auth_controller = {
   sign_up_user,
   login_user,
@@ -102,4 +112,5 @@ export const auth_controller = {
   forgot_password,
   reset_password,
   logged_out_all_device,
+  login_user_with_google,
 };

@@ -12,7 +12,7 @@ export type TLoggedInDevice = {
 export type TUser = {
   fullName: string;
   email: string;
-  password: string;
+  password?: string;
   profileImage?: string;
   subscribedPlanId?: ObjectId;
   loggedInDevices?: TLoggedInDevice[];
