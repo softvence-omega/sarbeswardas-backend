@@ -10,6 +10,8 @@ import { OTPMaker } from "../../utils/otp_maker";
 import { Request } from "express";
 import { UAParser } from "ua-parser-js";
 import { email } from "zod";
+import { sendEmailWithResend } from "../../utils/resend_email_service";
+import { sendEmailWithBrevo } from "../../utils/sendEmailWithBrevo";
 
 const sign_up_user_into_db = async (payload: TUser) => {
   const { email, password } = payload;
@@ -78,7 +80,7 @@ const login_user_into_db = async (req: Request, payload: { email: string; passwo
 
   // Generate JWT including deviceId
   const accessToken = jwtHelpers.generateToken(
-    { email: user.email, deviceId },
+    { email: user.email, deviceId, userId: user._id },
     config.access_token_secret as string,
     config.access_token_expires_in as string
   );
@@ -147,9 +149,15 @@ const forgot_password = async (emailInput: string | { email: string }) => {
     </table>
   `;
 
-  await sendEmail(email, "Your OTP", emailTemp);
+  // await sendEmail(email, "Your OTP", emailTemp);
+  // return "Check your email for OTP";
 
-  return "Check your email for OTP";
+  const result = await sendEmailWithBrevo(email, "Your forgot password OTP", emailTemp);
+  console.log(result);
+
+  // const resendResponse = await sendEmailWithResend(email, "Your forgot password OTP", emailTemp);
+  // console.log(resendResponse);
+  // return resendResponse;
 };
 
 const reset_password_into_db = async (email: string, otp: string, newPassword: string) => {
