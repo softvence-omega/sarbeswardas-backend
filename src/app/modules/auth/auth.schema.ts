@@ -17,7 +17,6 @@ const userSchema = new Schema<TUser>(
     },
     password: {
       type: String,
-      // required: [true, "Password is required"],
       minlength: [6, "Password must be at least 6 characters"],
     },
     profileImage: {
@@ -38,7 +37,7 @@ const userSchema = new Schema<TUser>(
     ],
     isVerified: {
       type: Boolean,
-      default: true,
+      default: false,
     },
     lastOTP: {
       type: String,

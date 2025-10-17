@@ -1,6 +1,5 @@
 import { AppError } from "../../utils/app_error";
 import catchAsync from "../../utils/catch_async";
-import { uploadToCloudinary } from "../../utils/cloudinaryUploader";
 import { sendResponse } from "../../utils/send_response";
 import { auth_service } from "./auth.service";
 
@@ -10,7 +9,25 @@ const sign_up_user = catchAsync(async (req, res) => {
   sendResponse(res, {
     success: true,
     statusCode: 200,
-    message: "User created successfully",
+    message: "Check your email for OTP",
+    data: result,
+  });
+});
+
+const verify_email = catchAsync(async (req, res) => {
+  const { email, otp } = req.body;
+
+  if (!email || !otp) {
+    throw new AppError(404, "Email or OTP not found!!");
+  }
+  const payload = { email, otp };
+
+  const result = await auth_service.verify_email_into_db(payload);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: 200,
+    message: "OTP verified successfully",
     data: result,
   });
 });
@@ -105,12 +122,26 @@ const login_user_with_google = catchAsync(async (req, res) => {
   });
 });
 
+const delete_account = catchAsync(async (req, res) => {
+  const userId = req.user?.userId;
+
+  await auth_service.delete_account_from_db(userId);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: 200,
+    message: "Account deleted successfully",
+  });
+});
+
 export const auth_controller = {
   sign_up_user,
+  verify_email,
   login_user,
   change_password,
   forgot_password,
   reset_password,
   logged_out_all_device,
   login_user_with_google,
+  delete_account,
 };

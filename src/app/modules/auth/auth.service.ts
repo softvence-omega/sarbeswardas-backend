@@ -8,8 +8,8 @@ import bcrypt from "bcrypt";
 import { OTPMaker } from "../../utils/otp_maker";
 import { Request } from "express";
 import { UAParser } from "ua-parser-js";
-import { sendEmailWithBrevo } from "../../utils/sendEmailWithBrevo";
 import mongoose from "mongoose";
+import { sendEmail } from "../../utils/send_email";
 
 interface GooglePayload {
   email: string;
@@ -37,6 +37,54 @@ const sign_up_user_into_db = async (payload: TUser) => {
     throw new AppError(403, "Failed to create user");
   }
 
+  const otp = OTPMaker();
+  await User_Model.findOneAndUpdate({ email }, { lastOTP: otp });
+
+  const otpDigits = otp.split("");
+
+  const emailTemp = `
+    <table ...>
+      ...
+      <tr>
+        ${otpDigits
+          .map(
+            (digit) => `
+            <td align="center" valign="middle"
+              style="background:#f5f3ff; border-radius:12px; width:56px; height:56px;">
+              <div style="font-size:22px; line-height:56px; color:#111827; font-weight:700; text-align:center;">
+                ${digit}
+              </div>
+            </td>
+            <td style="width:12px;">&nbsp;</td>
+          `
+          )
+          .join("")}
+      </tr>
+      ...
+    </table>
+  `;
+
+  await sendEmail(email, "Your OTP", emailTemp);
+  return "Check your email for OTP";
+};
+
+const verify_email_into_db = async (payload: { email: string; otp: string }) => {
+  const { email, otp } = payload;
+
+  const user = await User_Model.findOne({ email });
+  if (!user) {
+    throw new AppError(404, "User not found");
+  }
+
+  if (user.lastOTP !== otp) {
+    throw new AppError(403, "Wrong OTP");
+  }
+
+  const result = await User_Model.findOneAndUpdate({ email }, { isVerified: true }, { new: true });
+  if (!result) {
+    throw new AppError(500, "Failed to update verify status");
+  }
+
   return "";
 };
 
@@ -51,6 +99,10 @@ const login_user_into_db = async (req: Request, payload: { email: string; passwo
 
   if (!user) {
     throw new AppError(404, "User not found");
+  }
+
+  if (user.isVerified === false) {
+    throw new AppError(403, "Email not verified");
   }
 
   const isPasswordMatch = await bcrypt.compare(password, user?.password as string);
@@ -165,11 +217,11 @@ const forgot_password = async (emailInput: string | { email: string }) => {
     </table>
   `;
 
-  // await sendEmail(email, "Your OTP", emailTemp);
-  // return "Check your email for OTP";
+  await sendEmail(email, "Your OTP", emailTemp);
+  return "Check your email for OTP";
 
-  const result = await sendEmailWithBrevo(email, "Your forgot password OTP", emailTemp);
-  console.log(result);
+  // const result = await sendEmailWithBrevo(email, "Your forgot password OTP", emailTemp);
+  // console.log(result);
 
   // const resendResponse = await sendEmailWithResend(email, "Your forgot password OTP", emailTemp);
   // console.log(resendResponse);
@@ -212,7 +264,7 @@ const logged_out_all_device_from_db = async (email: string) => {
   return "";
 };
 
-export const login_user_with_google_from_db = async (payload: GooglePayload) => {
+const login_user_with_google_from_db = async (payload: GooglePayload) => {
   if (!payload) {
     throw new AppError(400, "Missing Google data");
   }
@@ -275,14 +327,35 @@ export const login_user_with_google_from_db = async (payload: GooglePayload) => 
   }
 };
 
+const delete_account_from_db = async (userId: string) => {
+  const user = User_Model.findById(userId);
+  if (!user) {
+    throw new AppError(404, "User not found");
+  }
+
+  const updatedUser = await User_Model.findByIdAndUpdate(
+    userId,
+    { isDeleted: true },
+    { new: true }
+  );
+
+  if (!updatedUser) {
+    throw new AppError(500, "Failed to delete account");
+  }
+
+  return updatedUser;
+};
+
 export const auth_service = {
   sign_up_user_into_db,
+  verify_email_into_db,
   login_user_into_db,
   change_password_into_db,
   forgot_password,
   reset_password_into_db,
   logged_out_all_device_from_db,
   login_user_with_google_from_db,
+  delete_account_from_db,
 };
 
 // Generate token valid for 1 hour
