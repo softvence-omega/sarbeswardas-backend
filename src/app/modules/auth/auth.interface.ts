@@ -2,6 +2,13 @@ import { ObjectId } from "mongoose";
 
 export type TRole = "ADMIN" | "LEAD" | "MEMBER";
 export type TAccountStatus = "ACTIVE" | "INACTIVE";
+export type TSubscriptionStatus =
+  | "trialing"
+  | "active"
+  | "past_due"
+  | "canceled"
+  | "incomplete"
+  | "none";
 export type TLoggedInDevice = {
   deviceId: string;
   userAgent?: string;
@@ -20,4 +27,10 @@ export type TUser = {
   lastOTP?: string;
   isActive?: TAccountStatus;
   isDeleted?: boolean;
+
+  // payment related
+  stripeCustomerId: string;
+  subscriptionId: string;
+  subscriptionStatus: TSubscriptionStatus;
+  trialEndsAt: Date;
 };

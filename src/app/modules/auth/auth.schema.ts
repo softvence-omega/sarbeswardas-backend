@@ -52,6 +52,16 @@ const userSchema = new Schema<TUser>(
       type: Boolean,
       default: false,
     },
+
+    // payment related
+    stripeCustomerId: { type: String },
+    subscriptionId: { type: String },
+    subscriptionStatus: {
+      type: String,
+      enum: ["trialing", "active", "past_due", "canceled", "incomplete", "none"],
+      default: "none",
+    },
+    trialEndsAt: { type: Date },
   },
   {
     timestamps: true,
