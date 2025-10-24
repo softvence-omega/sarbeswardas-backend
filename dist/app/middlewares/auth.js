@@ -15,7 +15,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const app_error_1 = require("../utils/app_error");
 const JWT_1 = require("../utils/JWT");
 const config_1 = __importDefault(require("../config"));
-// import { TRole } from "../modules/auth/auth.interface";
 const auth_schema_1 = require("../modules/auth/auth.schema");
 // ...role: TRole[]
 const auth = () => {
@@ -23,7 +22,7 @@ const auth = () => {
         var _a, _b;
         try {
             let token;
-            // ✅ Prefer Bearer token from headers, fallback to cookies
+            // Prefer Bearer token from headers, fallback to cookies
             if (req.headers.authorization) {
                 token = req.headers.authorization;
             }
@@ -37,9 +36,6 @@ const auth = () => {
                 });
             }
             const verifyUser = JWT_1.jwtHelpers.verifyToken(token, config_1.default.access_token_secret);
-            // if (!role.length || !role.includes(verifyUser.role)) {
-            //   throw new AppError(401, "You are not authorized!!");
-            // }
             const isUserExist = yield auth_schema_1.User_Model.findOne({ email: verifyUser.email });
             if (!isUserExist) {
                 throw new app_error_1.AppError(404, "This user not exist!!");
@@ -47,9 +43,6 @@ const auth = () => {
             if (isUserExist.isDeleted === true) {
                 throw new app_error_1.AppError(401, "Account is deleted.");
             }
-            // if (isUserExist.isActive === "SUSPENDED") {
-            //   throw new AppError(401, "Suspended user.");
-            // }
             if (isUserExist.isActive === "INACTIVE") {
                 throw new app_error_1.AppError(401, "Inactive user");
             }
@@ -58,7 +51,7 @@ const auth = () => {
             }
             const validDevice = (_b = isUserExist.loggedInDevices) === null || _b === void 0 ? void 0 : _b.some((d) => d.deviceId === verifyUser.deviceId);
             if (!validDevice)
-                throw new app_error_1.AppError(401, "Session expired or device logged out");
+                throw new app_error_1.AppError(401, "Session expired or device logged out. Please login your account");
             req.user = verifyUser;
             next();
         }

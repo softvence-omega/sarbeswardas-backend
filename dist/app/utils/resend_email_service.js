@@ -20,7 +20,6 @@ const sendEmailWithResend = (to, subject, html) => __awaiter(void 0, void 0, voi
             subject,
             html,
         });
-        console.log("✅ Email sent successfully");
     }
     catch (err) {
         console.error("❌ Email send failed:", err);

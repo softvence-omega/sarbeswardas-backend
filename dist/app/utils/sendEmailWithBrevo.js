@@ -32,7 +32,7 @@ const sendEmailWithBrevo = (to, subject, html) => __awaiter(void 0, void 0, void
             html,
         };
         const info = yield transporter.sendMail(mailOptions);
-        console.log("✅ Email sent successfully:", info.messageId);
+        // console.log("✅ Email sent successfully:", info.messageId);
         return { success: true, messageId: info.messageId };
     }
     catch (error) {

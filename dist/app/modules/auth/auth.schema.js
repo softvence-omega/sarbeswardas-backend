@@ -17,7 +17,6 @@ const userSchema = new mongoose_1.Schema({
     },
     password: {
         type: String,
-        // required: [true, "Password is required"],
         minlength: [6, "Password must be at least 6 characters"],
     },
     profileImage: {
@@ -27,6 +26,10 @@ const userSchema = new mongoose_1.Schema({
     subscribedPlanId: {
         type: mongoose_1.Schema.Types.ObjectId,
         ref: "Plan", // optional, change if you have a Plan model
+    },
+    hasUsedTrial: {
+        type: Boolean,
+        default: false,
     },
     loggedInDevices: [
         {
@@ -38,7 +41,7 @@ const userSchema = new mongoose_1.Schema({
     ],
     isVerified: {
         type: Boolean,
-        default: true,
+        default: false,
     },
     lastOTP: {
         type: String,
@@ -53,6 +56,24 @@ const userSchema = new mongoose_1.Schema({
         type: Boolean,
         default: false,
     },
+    // payment related
+    stripeCustomerId: { type: String },
+    subscriptionId: { type: String },
+    subscriptionStatus: {
+        type: String,
+        enum: [
+            "incomplete",
+            "incomplete_expired",
+            "trialing",
+            "active",
+            "past_due",
+            "canceled",
+            "unpaid",
+            "paused",
+        ],
+        default: "none",
+    },
+    trialEndsAt: { type: Date },
 }, {
     timestamps: true,
     versionKey: false,

@@ -12,7 +12,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.auth_service = exports.login_user_with_google_from_db = void 0;
+exports.auth_service = void 0;
 const uuid_1 = require("uuid");
 const config_1 = __importDefault(require("../../config"));
 const app_error_1 = require("../../utils/app_error");
@@ -21,8 +21,8 @@ const auth_schema_1 = require("./auth.schema");
 const bcrypt_1 = __importDefault(require("bcrypt"));
 const otp_maker_1 = require("../../utils/otp_maker");
 const ua_parser_js_1 = require("ua-parser-js");
-const sendEmailWithBrevo_1 = require("../../utils/sendEmailWithBrevo");
 const mongoose_1 = __importDefault(require("mongoose"));
+const send_email_1 = require("../../utils/send_email");
 const sign_up_user_into_db = (payload) => __awaiter(void 0, void 0, void 0, function* () {
     const { email, password } = payload;
     if (!email || !password) {
@@ -38,6 +38,44 @@ const sign_up_user_into_db = (payload) => __awaiter(void 0, void 0, void 0, func
     if (!updatedUser) {
         throw new app_error_1.AppError(403, "Failed to create user");
     }
+    const otp = (0, otp_maker_1.OTPMaker)();
+    yield auth_schema_1.User_Model.findOneAndUpdate({ email }, { lastOTP: otp });
+    const otpDigits = otp.split("");
+    const emailTemp = `
+    <table ...>
+      ...
+      <tr>
+        ${otpDigits
+        .map((digit) => `
+            <td align="center" valign="middle"
+              style="background:#f5f3ff; border-radius:12px; width:56px; height:56px;">
+              <div style="font-size:22px; line-height:56px; color:#111827; font-weight:700; text-align:center;">
+                ${digit}
+              </div>
+            </td>
+            <td style="width:12px;">&nbsp;</td>
+          `)
+        .join("")}
+      </tr>
+      ...
+    </table>
+  `;
+    yield (0, send_email_1.sendEmail)(email, "Your OTP", emailTemp);
+    return "Check your email for OTP";
+});
+const verify_email_into_db = (payload) => __awaiter(void 0, void 0, void 0, function* () {
+    const { email, otp } = payload;
+    const user = yield auth_schema_1.User_Model.findOne({ email });
+    if (!user) {
+        throw new app_error_1.AppError(404, "User not found");
+    }
+    if (user.lastOTP !== otp) {
+        throw new app_error_1.AppError(403, "Wrong OTP");
+    }
+    const result = yield auth_schema_1.User_Model.findOneAndUpdate({ email }, { isVerified: true }, { new: true });
+    if (!result) {
+        throw new app_error_1.AppError(500, "Failed to update verify status");
+    }
     return "";
 });
 const login_user_into_db = (req, payload) => __awaiter(void 0, void 0, void 0, function* () {
@@ -48,6 +86,9 @@ const login_user_into_db = (req, payload) => __awaiter(void 0, void 0, void 0, f
     const user = yield auth_schema_1.User_Model.findOne({ email, isDeleted: false });
     if (!user) {
         throw new app_error_1.AppError(404, "User not found");
+    }
+    if (user.isVerified === false) {
+        throw new app_error_1.AppError(403, "Email not verified");
     }
     const isPasswordMatch = yield bcrypt_1.default.compare(password, user === null || user === void 0 ? void 0 : user.password);
     if (!isPasswordMatch) {
@@ -132,10 +173,10 @@ const forgot_password = (emailInput) => __awaiter(void 0, void 0, void 0, functi
       ...
     </table>
   `;
-    // await sendEmail(email, "Your OTP", emailTemp);
-    // return "Check your email for OTP";
-    const result = yield (0, sendEmailWithBrevo_1.sendEmailWithBrevo)(email, "Your forgot password OTP", emailTemp);
-    console.log(result);
+    yield (0, send_email_1.sendEmail)(email, "Your OTP", emailTemp);
+    return "Check your email for OTP";
+    // const result = await sendEmailWithBrevo(email, "Your forgot password OTP", emailTemp);
+    // console.log(result);
     // const resendResponse = await sendEmailWithResend(email, "Your forgot password OTP", emailTemp);
     // console.log(resendResponse);
     // return resendResponse;
@@ -219,15 +260,27 @@ const login_user_with_google_from_db = (payload) => __awaiter(void 0, void 0, vo
         throw new app_error_1.AppError(500, error.message || "Google login failed");
     }
 });
-exports.login_user_with_google_from_db = login_user_with_google_from_db;
+const delete_account_from_db = (userId) => __awaiter(void 0, void 0, void 0, function* () {
+    const user = auth_schema_1.User_Model.findById(userId);
+    if (!user) {
+        throw new app_error_1.AppError(404, "User not found");
+    }
+    const updatedUser = yield auth_schema_1.User_Model.findByIdAndUpdate(userId, { isDeleted: true }, { new: true });
+    if (!updatedUser) {
+        throw new app_error_1.AppError(500, "Failed to delete account");
+    }
+    return updatedUser;
+});
 exports.auth_service = {
     sign_up_user_into_db,
+    verify_email_into_db,
     login_user_into_db,
     change_password_into_db,
     forgot_password,
     reset_password_into_db,
     logged_out_all_device_from_db,
-    login_user_with_google_from_db: exports.login_user_with_google_from_db,
+    login_user_with_google_from_db,
+    delete_account_from_db,
 };
 // Generate token valid for 1 hour
 // const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET as string, {

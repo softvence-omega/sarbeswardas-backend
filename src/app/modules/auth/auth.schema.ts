@@ -27,6 +27,10 @@ const userSchema = new Schema<TUser>(
       type: Schema.Types.ObjectId,
       ref: "Plan", // optional, change if you have a Plan model
     },
+    hasUsedTrial: {
+      type: Boolean,
+      default: false,
+    },
     loggedInDevices: [
       {
         deviceId: { type: String, required: true },
@@ -58,7 +62,16 @@ const userSchema = new Schema<TUser>(
     subscriptionId: { type: String },
     subscriptionStatus: {
       type: String,
-      enum: ["trialing", "active", "past_due", "canceled", "incomplete", "none"],
+      enum: [
+        "incomplete",
+        "incomplete_expired",
+        "trialing",
+        "active",
+        "past_due",
+        "canceled",
+        "unpaid",
+        "paused",
+      ],
       default: "none",
     },
     trialEndsAt: { type: Date },

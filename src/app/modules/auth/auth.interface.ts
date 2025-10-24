@@ -3,11 +3,14 @@ import { ObjectId } from "mongoose";
 export type TRole = "ADMIN" | "LEAD" | "MEMBER";
 export type TAccountStatus = "ACTIVE" | "INACTIVE";
 export type TSubscriptionStatus =
+  | "incomplete"
+  | "incomplete_expired"
   | "trialing"
   | "active"
   | "past_due"
   | "canceled"
-  | "incomplete"
+  | "unpaid"
+  | "paused"
   | "none";
 export type TLoggedInDevice = {
   deviceId: string;
@@ -22,6 +25,7 @@ export type TUser = {
   password?: string;
   profileImage?: string;
   subscribedPlanId?: ObjectId;
+  hasUsedTrial: boolean;
   loggedInDevices?: TLoggedInDevice[];
   isVerified?: boolean;
   lastOTP?: string;

@@ -20,7 +20,7 @@ export const sendEmailWithBrevo = async (to: string, subject: string, html: stri
     };
 
     const info = await transporter.sendMail(mailOptions);
-    console.log("✅ Email sent successfully:", info.messageId);
+    // console.log("✅ Email sent successfully:", info.messageId);
 
     return { success: true, messageId: info.messageId };
   } catch (error) {

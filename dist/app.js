@@ -10,7 +10,9 @@ const cors_1 = __importDefault(require("cors"));
 const routes_1 = __importDefault(require("./routes"));
 const not_found_route_1 = __importDefault(require("./app/middlewares/not_found_route"));
 const global_error_handler_1 = require("./app/middlewares/global_error_handler");
+const plan_controller_1 = require("./app/modules/plan/plan.controller");
 exports.app = (0, express_1.default)();
+exports.app.post("/api/v1/payment/webhook", express_1.default.raw({ type: "application/json" }), plan_controller_1.handle_stripe_webhook);
 // parsers
 exports.app.use(express_useragent_1.default.express());
 exports.app.use(express_1.default.json());

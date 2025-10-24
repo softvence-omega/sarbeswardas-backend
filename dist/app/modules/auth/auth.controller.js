@@ -22,7 +22,21 @@ const sign_up_user = (0, catch_async_1.default)((req, res) => __awaiter(void 0, 
     (0, send_response_1.sendResponse)(res, {
         success: true,
         statusCode: 200,
-        message: "User created successfully",
+        message: "Check your email for OTP",
+        data: result,
+    });
+}));
+const verify_email = (0, catch_async_1.default)((req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const { email, otp } = req.body;
+    if (!email || !otp) {
+        throw new app_error_1.AppError(404, "Email or OTP not found!!");
+    }
+    const payload = { email, otp };
+    const result = yield auth_service_1.auth_service.verify_email_into_db(payload);
+    (0, send_response_1.sendResponse)(res, {
+        success: true,
+        statusCode: 200,
+        message: "OTP verified successfully",
         data: result,
     });
 }));
@@ -98,12 +112,24 @@ const login_user_with_google = (0, catch_async_1.default)((req, res) => __awaite
         data: result,
     });
 }));
+const delete_account = (0, catch_async_1.default)((req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
+    const userId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.userId;
+    yield auth_service_1.auth_service.delete_account_from_db(userId);
+    (0, send_response_1.sendResponse)(res, {
+        success: true,
+        statusCode: 200,
+        message: "Account deleted successfully",
+    });
+}));
 exports.auth_controller = {
     sign_up_user,
+    verify_email,
     login_user,
     change_password,
     forgot_password,
     reset_password,
     logged_out_all_device,
     login_user_with_google,
+    delete_account,
 };
