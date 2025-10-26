@@ -70,6 +70,7 @@ const userSchema = new mongoose_1.Schema({
             "canceled",
             "unpaid",
             "paused",
+            "none",
         ],
         default: "none",
     },
