@@ -41,7 +41,7 @@ const userSchema = new mongoose_1.Schema({
     ],
     isVerified: {
         type: Boolean,
-        default: false,
+        default: true,
     },
     lastOTP: {
         type: String,

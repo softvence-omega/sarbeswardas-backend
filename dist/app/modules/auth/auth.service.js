@@ -60,8 +60,9 @@ const sign_up_user_into_db = (payload) => __awaiter(void 0, void 0, void 0, func
       ...
     </table>
   `;
-    yield (0, send_email_1.sendEmail)(email, "Your OTP", emailTemp);
-    return "Check your email for OTP";
+    // await sendEmail(email, "Your OTP", emailTemp);
+    // return "Check your email for OTP";
+    return "User register successfully";
 });
 const verify_email_into_db = (payload) => __awaiter(void 0, void 0, void 0, function* () {
     const { email, otp } = payload;

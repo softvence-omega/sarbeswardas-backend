@@ -7,6 +7,11 @@ import { TAdapterResponseDoc, TChatMessage, TChatSession } from "./ai_session.in
 
 const chatSessionSchema = new Schema<TChatSession>(
   {
+    title: {
+      type: String,
+      trim: true,
+      default: "Untitled Chat",
+    },
     sessionId: {
       type: String,
       required: [true, "Session ID is required"],
@@ -40,10 +45,7 @@ const chatSessionSchema = new Schema<TChatSession>(
 chatSessionSchema.index({ userId: 1, createdAt: -1 });
 chatSessionSchema.index({ sessionId: 1, isDeleted: 1 });
 
-export const ChatSession_Model = model<TChatSession>(
-  "ChatSession",
-  chatSessionSchema
-);
+export const ChatSession_Model = model<TChatSession>("ChatSession", chatSessionSchema);
 
 // ============= Chat Message Schema =============
 
@@ -67,6 +69,11 @@ const chatMessageSchema = new Schema<TChatMessage>(
     content: {
       type: String,
       required: [true, "Content is required"],
+    },
+    contentType: {
+      type: String,
+      enum: ["text", "image"], // NEW FIELD
+      default: "text",
     },
     selectedAdapter: {
       type: String,
@@ -94,22 +101,16 @@ chatMessageSchema.index({ sessionId: 1, sequenceNumber: 1 });
 chatMessageSchema.index({ sessionId: 1, messageType: 1, sequenceNumber: 1 });
 
 // Ensure unique sequence numbers per session and message type
-chatMessageSchema.index(
-  { sessionId: 1, sequenceNumber: 1, messageType: 1 },
-  { unique: true }
-);
+chatMessageSchema.index({ sessionId: 1, sequenceNumber: 1, messageType: 1 }, { unique: true });
 
-export const ChatMessage_Model = model<TChatMessage>(
-  "ChatMessage",
-  chatMessageSchema
-);
+export const ChatMessage_Model = model<TChatMessage>("ChatMessage", chatMessageSchema);
 
 // ============= Adapter Response Schema =============
 
 const adapterResponseSchema = new Schema<TAdapterResponseDoc>(
   {
     messageId: {
-      type: Schema.Types.ObjectId,
+      type: String,
       ref: "ChatMessage",
       required: [true, "Message ID is required"],
       index: true,
@@ -119,17 +120,15 @@ const adapterResponseSchema = new Schema<TAdapterResponseDoc>(
       required: [true, "Adapter name is required"],
       enum: ["openai", "gemini", "claude", "perplexity"],
     },
-    text: {
-      type: String,
-      required: [true, "Text is required"],
+    text: { type: String },
+    image: {
+      url: { type: String },
+      compressed: { type: Boolean },
+      original_size_kb: { type: Number },
+      compressed_size_kb: { type: Number },
     },
-    isSelected: {
-      type: Boolean,
-      default: false,
-    },
-    responseTimeMs: {
-      type: Number,
-    },
+    isSelected: { type: Boolean, default: false },
+    responseTimeMs: { type: Number },
   },
   {
     timestamps: true,

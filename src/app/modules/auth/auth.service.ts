@@ -64,8 +64,9 @@ const sign_up_user_into_db = async (payload: TUser) => {
     </table>
   `;
 
-  await sendEmail(email, "Your OTP", emailTemp);
-  return "Check your email for OTP";
+  // await sendEmail(email, "Your OTP", emailTemp);
+  // return "Check your email for OTP";
+  return "User register successfully"
 };
 
 const verify_email_into_db = async (payload: { email: string; otp: string }) => {

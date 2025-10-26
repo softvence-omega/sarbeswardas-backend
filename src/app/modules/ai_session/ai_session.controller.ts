@@ -4,6 +4,7 @@ import { Request, Response } from "express";
 import catchAsync from "../../utils/catch_async";
 import { chat_service } from "./ai_session.service";
 import { sendResponse } from "../../utils/send_response";
+import { AppError } from "../../utils/app_error";
 
 /**
  * POST /api/chat/send
@@ -11,9 +12,12 @@ import { sendResponse } from "../../utils/send_response";
  */
 const send_prompt = catchAsync(async (req: Request, res: Response) => {
   const userId = req.user?.userId;
-  const { session_id, prompt } = req.body;
+  const { session_id, prompt, contentType } = req.body;
+  if (!session_id || !prompt || !contentType) {
+    throw new AppError(404, "session_id , prompt or contentType not found");
+  }
 
-  const result = await chat_service.send_prompt_to_ai(userId, session_id, prompt);
+  const result = await chat_service.send_prompt_to_ai(userId, session_id, prompt, contentType);
 
   sendResponse(res, {
     success: true,
@@ -127,6 +131,45 @@ const get_user_sessions = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+const update_session_title = catchAsync(async (req: Request, res: Response) => {
+  const { sessionId, newTitle } = req.body;
+
+  if (!sessionId || !newTitle) {
+    throw new AppError(404, "sessionId or newTitle not found in payload");
+  }
+  const result = chat_service.update_session_title_into_bd(sessionId, newTitle);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: 200,
+    message: "Session title updated successfully",
+    data: result,
+  });
+});
+
+const generate_ai_image = async (req: Request, res: Response) => {
+  try {
+    const { session_id, prompt } = req.body;
+    const userId = req.user?.userId;
+
+    if (!session_id || !prompt) {
+      throw new AppError(400, "sessionId and prompt are required");
+    }
+
+    const result = await chat_service.handle_ai_image(userId, session_id, prompt);
+
+    res.status(200).json({
+      success: true,
+      data: result,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      message: error.message || "Image generation failed",
+    });
+  }
+};
+
 export const chat_controller = {
   send_prompt,
   get_session_history,
@@ -134,4 +177,6 @@ export const chat_controller = {
   update_selection,
   delete_session,
   get_user_sessions,
+  update_session_title,
+  generate_ai_image,
 };
