@@ -1,10 +1,6 @@
 import { email, z } from "zod";
 
-
-export const register_schema = z.object({
-  
-})
-
+export const register_schema = z.object({});
 
 export const login_schema = z.object({
   email: z.string().email("Invalid email address"),

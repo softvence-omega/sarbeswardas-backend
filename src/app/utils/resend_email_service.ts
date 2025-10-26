@@ -9,7 +9,6 @@ export const sendEmailWithResend = async (to: string, subject: string, html: any
       subject,
       html,
     });
-    console.log("✅ Email sent successfully");
   } catch (err) {
     console.error("❌ Email send failed:", err);
   }

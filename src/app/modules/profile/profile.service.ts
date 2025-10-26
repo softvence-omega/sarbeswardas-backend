@@ -1,5 +1,4 @@
 import { AppError } from "../../utils/app_error";
-import { TUser } from "../auth/auth.interface";
 import { User_Model } from "../auth/auth.schema";
 
 const get_profile_info_from_db = async (email: string) => {
