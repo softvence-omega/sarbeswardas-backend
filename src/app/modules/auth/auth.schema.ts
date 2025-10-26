@@ -41,7 +41,7 @@ const userSchema = new Schema<TUser>(
     ],
     isVerified: {
       type: Boolean,
-      default: false,
+      default: true,
     },
     lastOTP: {
       type: String,
