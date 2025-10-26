@@ -45,7 +45,7 @@ const create_checkout_session = async (userId: string, planId: string) => {
           quantity: 1,
         },
       ],
-      success_url: `${process.env.CLIENT_URL}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
+      success_url: `${process.env.CLIENT_URL}/payment/success`,
       cancel_url: `${process.env.CLIENT_URL}/payment/cancel`,
     };
 
