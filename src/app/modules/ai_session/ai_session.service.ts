@@ -2,6 +2,7 @@
 
 import axios, { AxiosError } from "axios";
 import mongoose from "mongoose";
+import fs from "fs";
 import {
   TAdapterResponse,
   TAIServiceResponse,
@@ -11,6 +12,9 @@ import {
 } from "./ai_session.interface";
 import { AdapterResponse_Model, ChatMessage_Model, ChatSession_Model } from "./ai_session.schema";
 import { AppError } from "../../utils/app_error";
+import { uploadToCloudinary } from "../../utils/cloudinaryUploader";
+// import { fs } from 'fs';
+import { call_ai_image_service } from "../../utils/call_ai_image_service";
 
 /**
  * Send prompt to AI and store response
@@ -18,14 +22,15 @@ import { AppError } from "../../utils/app_error";
 const send_prompt_to_ai = async (
   userId: string,
   sessionId: string,
-  prompt: string
+  prompt: string,
+  contentType: string,
 ): Promise<TSendPromptResult> => {
   const session = await mongoose.startSession();
   session.startTransaction();
 
   try {
     // 1. Ensure session exists
-    await ensure_session_exists(userId, sessionId, session);
+    await ensure_session_exists(userId, sessionId, session, prompt);
 
     // 2. Get next sequence number
     const sequenceNumber = await get_next_sequence_number(sessionId);
@@ -142,7 +147,7 @@ const get_session_history_from_db = async (
     }
     adapterResponseMap.get(msgId)!.push({
       adapter: ar.adapter,
-      text: ar.text,
+      text: ar.text ?? "",
     });
   });
 
@@ -295,7 +300,7 @@ const update_selected_adapter_in_db = async (
   }
 
   // Update response message
-  responseMessage.content = adapterResponse.text;
+  responseMessage.content = adapterResponse.text ?? "";
   responseMessage.selectedAdapter = selectedAdapter as any;
   await responseMessage.save();
 
@@ -405,12 +410,91 @@ const get_user_sessions_from_db = async (
     };
     return {
       sessionId: s.sessionId,
+      title: s.title || "Untitled Chat",
       messageCount: stats.count,
       lastMessageAt: stats.lastMessageAt,
       createdAt: s.createdAt!,
       updatedAt: s.updatedAt!,
     };
   });
+};
+
+const update_session_title_into_bd = async (sessionId: string, newTitle: string) => {
+  const updatedSession = await ChatSession_Model.findOneAndUpdate(
+    { sessionId },
+    { title: newTitle },
+    { new: true }
+  );
+
+  if (!updatedSession) {
+    throw new AppError(500, "Failed to update session title");
+  }
+
+  return "";
+};
+
+const handle_ai_image = async (userId: string, sessionId: string, prompt: string) => {
+  // 1 Ensure session exists
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  try {
+    await ensure_session_exists(userId, sessionId, session, prompt);
+    await session.commitTransaction();
+  } catch (err) {
+    if (session.inTransaction()) await session.abortTransaction();
+    session.endSession();
+    throw err;
+  } finally {
+    session.endSession();
+  }
+
+  // 2️⃣ Call AI Image API
+  const aiResponse = await call_ai_image_service({
+    session_id: sessionId,
+    prompt,
+    size: "1024x1024",
+    compress: true,
+    max_size_kb: 500,
+  });
+
+  // 3️⃣ Convert base64 -> file and upload to Cloudinary
+  const base64Data = aiResponse.url.split(";base64,").pop();
+  const buffer = Buffer.from(base64Data!, "base64");
+  const filePath = `uploads/${Date.now()}-${sessionId}.jpg`;
+  await fs.promises.writeFile(filePath, buffer);
+
+  const cloudinaryResult = await uploadToCloudinary(filePath);
+
+  // 4️⃣ Store image response in DB (message + adapter)
+  const message = await ChatMessage_Model.create({
+    sessionId,
+    messageType: "response",
+    sequenceNumber: Date.now(), // or your normal sequence system
+    content: "[IMAGE_GENERATED]",
+    selectedAdapter: aiResponse.adapter,
+    userId,
+  });
+
+  await AdapterResponse_Model.create({
+    messageId: message._id,
+    adapter: aiResponse.adapter,
+    text: prompt, // store prompt text for reference
+    image: {
+      url: cloudinaryResult.url,
+      publicId: cloudinaryResult.public_id,
+      compressed: aiResponse.compressed,
+      originalSizeKb: aiResponse.original_size_kb,
+      compressedSizeKb: aiResponse.compressed_size_kb,
+    },
+    isSelected: true,
+  });
+
+  return {
+    sessionId,
+    prompt,
+    imageUrl: cloudinaryResult.url,
+    adapter: aiResponse.adapter,
+  };
 };
 
 // ============= Helper Functions =============
@@ -489,11 +573,13 @@ const store_ai_response = async (
 const ensure_session_exists = async (
   userId: string,
   sessionId: string,
-  session: mongoose.ClientSession
+  session: mongoose.ClientSession,
+  prompt: string
 ): Promise<void> => {
+  const title = prompt.slice(0, 40);
   const exists = await ChatSession_Model.findOne({ sessionId });
   if (!exists) {
-    await ChatSession_Model.create([{ sessionId, userId }], { session });
+    await ChatSession_Model.create([{ sessionId, userId, title }], { session });
   } else if (exists.userId.toString() !== userId) {
     throw new AppError(403, "Session belongs to another user");
   }
@@ -551,4 +637,6 @@ export const chat_service = {
   update_selected_adapter_in_db,
   delete_session_from_db,
   get_user_sessions_from_db,
+  update_session_title_into_bd,
+  handle_ai_image,
 };

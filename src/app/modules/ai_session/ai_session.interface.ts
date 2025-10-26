@@ -22,9 +22,17 @@ export type TAIServiceResponse = {
   responses: TAdapterResponse[];
 };
 
+export interface TAdapterImageMeta {
+  url: string; // Cloudinary URL after upload
+  compressed?: boolean;
+  original_size_kb?: number;
+  compressed_size_kb?: number;
+}
+
 // ============= Database Document Types =============
 
 export type TChatSession = {
+  title: string;
   sessionId: string;
   userId: ObjectId;
   metadata?: Record<string, any>;
@@ -34,12 +42,14 @@ export type TChatSession = {
 };
 
 export type TMessageType = "prompt" | "response";
+export type TContentType = "text" | "image";
 
 export type TChatMessage = {
   sessionId: string;
   messageType: TMessageType;
   sequenceNumber: number;
   content: string;
+  contentType: TContentType;
   selectedAdapter?: TAdapterType;
   userId: ObjectId;
   isDeleted?: boolean;
@@ -47,14 +57,16 @@ export type TChatMessage = {
   updatedAt?: Date;
 };
 
-export type TAdapterResponseDoc = {
-  messageId: ObjectId;
+export interface TAdapterResponseDoc {
+  messageId: string;
   adapter: TAdapterType;
-  text: string;
-  isSelected: boolean;
+  text?: string; // For text responses
+  image?: TAdapterImageMeta; // For image responses
+  isSelected?: boolean;
   responseTimeMs?: number;
   createdAt?: Date;
-};
+  updatedAt?: Date;
+}
 
 // ============= Service Response Types =============
 
