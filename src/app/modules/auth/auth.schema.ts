@@ -17,7 +17,6 @@ const userSchema = new Schema<TUser>(
     },
     password: {
       type: String,
-      required: [true, "Password is required"],
       minlength: [6, "Password must be at least 6 characters"],
     },
     profileImage: {
@@ -27,6 +26,10 @@ const userSchema = new Schema<TUser>(
     subscribedPlanId: {
       type: Schema.Types.ObjectId,
       ref: "Plan", // optional, change if you have a Plan model
+    },
+    hasUsedTrial: {
+      type: Boolean,
+      default: false,
     },
     loggedInDevices: [
       {
@@ -38,7 +41,7 @@ const userSchema = new Schema<TUser>(
     ],
     isVerified: {
       type: Boolean,
-      default: true,
+      default: false,
     },
     lastOTP: {
       type: String,
@@ -53,6 +56,26 @@ const userSchema = new Schema<TUser>(
       type: Boolean,
       default: false,
     },
+
+    // payment related
+    stripeCustomerId: { type: String },
+    subscriptionId: { type: String },
+    subscriptionStatus: {
+      type: String,
+      enum: [
+        "incomplete",
+        "incomplete_expired",
+        "trialing",
+        "active",
+        "past_due",
+        "canceled",
+        "unpaid",
+        "paused",
+        "none",
+      ],
+      default: "none",
+    },
+    trialEndsAt: { type: Date },
   },
   {
     timestamps: true,
