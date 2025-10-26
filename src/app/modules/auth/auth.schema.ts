@@ -71,6 +71,7 @@ const userSchema = new Schema<TUser>(
         "canceled",
         "unpaid",
         "paused",
+        "none",
       ],
       default: "none",
     },

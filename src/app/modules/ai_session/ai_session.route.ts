@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { chat_controller } from "./ai_session.controller";
 import auth from "../../middlewares/auth";
+import { verifySubscription } from "../../utils/verifySubscription";
 
 const router = Router();
 
@@ -9,7 +10,7 @@ const router = Router();
  * @desc    Send a prompt to AI and get a response
  * @access  Protected
  */
-router.post("/send", auth(), chat_controller.send_prompt);
+router.post("/send", auth(), verifySubscription(), chat_controller.send_prompt);
 
 /**
  * @route   GET /api/chat/session/:sessionId
