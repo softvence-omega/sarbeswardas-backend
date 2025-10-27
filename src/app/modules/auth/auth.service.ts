@@ -66,7 +66,7 @@ const sign_up_user_into_db = async (payload: TUser) => {
 
   // await sendEmail(email, "Your OTP", emailTemp);
   // return "Check your email for OTP";
-  return "User register successfully"
+  return "User register successfully";
 };
 
 const verify_email_into_db = async (payload: { email: string; otp: string }) => {
@@ -288,7 +288,7 @@ const login_user_with_google_from_db = async (payload: GooglePayload) => {
           {
             email: payload.email,
             provider: payload.provider,
-            firstName: payload.fullName,
+            fullName: payload.fullName,
             isVerified: true,
             profileImage: payload.photoUrl || undefined,
           },
