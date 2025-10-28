@@ -210,52 +210,64 @@ const logged_out_all_device_from_db = (email) => __awaiter(void 0, void 0, void 
     }
     return "";
 });
-const login_user_with_google_from_db = (payload) => __awaiter(void 0, void 0, void 0, function* () {
-    if (!payload) {
+const login_user_with_google_from_db = (req, payload) => __awaiter(void 0, void 0, void 0, function* () {
+    if (!payload)
         throw new app_error_1.AppError(400, "Missing Google data");
-    }
-    //  Validate input early
     if (!payload.email || !payload.provider || !payload.fullName) {
         throw new app_error_1.AppError(400, "Missing required Google login data");
     }
     const session = yield mongoose_1.default.startSession();
     session.startTransaction();
     try {
-        //  Find existing user
         let user = yield auth_schema_1.User_Model.findOne({ email: payload.email }).session(session);
-        //  If user doesn’t exist, create one
         if (!user) {
             const newUsers = yield auth_schema_1.User_Model.create([
                 {
                     email: payload.email,
                     provider: payload.provider,
-                    firstName: payload.fullName,
+                    fullName: payload.fullName,
                     isVerified: true,
-                    profileImage: payload.photoUrl || undefined,
+                    profileImage: payload.photoUrl || "",
                 },
             ], { session });
             user = newUsers[0];
         }
-        //  Commit transaction before using user
         yield session.commitTransaction();
         session.endSession();
-        //  Post-checks after commit
         if (!user)
             throw new app_error_1.AppError(404, "Account not found");
         if (user.isDeleted)
             throw new app_error_1.AppError(403, "This account has been deleted");
         if (user.isActive === "INACTIVE")
             throw new app_error_1.AppError(403, "This account is blocked");
-        //  Generate JWT
-        const accessToken = JWT_1.jwtHelpers.generateToken({ email: user.email, userId: user._id }, config_1.default.access_token_secret, config_1.default.access_token_expires_in);
-        return {
-            success: true,
-            message: user ? "Login successful" : "Account created successfully",
-            accessToken,
+        // --- Device Login Tracking ---
+        const deviceId = (0, uuid_1.v4)();
+        const userAgent = req.headers["user-agent"] || "Unknown";
+        let ip = req.ip || req.headers["x-forwarded-for"] || req.socket.remoteAddress;
+        if (Array.isArray(ip))
+            ip = ip[0];
+        if (typeof ip !== "string")
+            ip = ip ? String(ip) : "Unknown";
+        const parser = new ua_parser_js_1.UAParser(userAgent);
+        const device = {
+            deviceId,
+            userAgent: `${parser.getBrowser().name} on ${parser.getOS().name}`,
+            ip,
+            loggedInAt: new Date(),
         };
+        let updatedDevices = user.loggedInDevices || [];
+        updatedDevices.push(device);
+        if (updatedDevices.length > 3) {
+            updatedDevices = updatedDevices.slice(updatedDevices.length - 3);
+        }
+        user.loggedInDevices = updatedDevices;
+        yield user.save();
+        // --- Generate JWT ---
+        const accessToken = JWT_1.jwtHelpers.generateToken({ email: user.email, deviceId, userId: user._id }, config_1.default.access_token_secret, config_1.default.access_token_expires_in);
+        // --- Return exactly like login_user_into_db ---
+        return { accessToken };
     }
     catch (error) {
-        // Rollback if any failure
         yield session.abortTransaction();
         session.endSession();
         throw new app_error_1.AppError(500, error.message || "Google login failed");

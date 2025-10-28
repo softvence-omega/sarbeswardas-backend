@@ -55,18 +55,13 @@ const update_profile_name = (0, catch_async_1.default)((req, res) => __awaiter(v
 }));
 exports.update_profile_image = (0, catch_async_1.default)((req, res) => __awaiter(void 0, void 0, void 0, function* () {
     var _a;
-    const email = (_a = req.user) === null || _a === void 0 ? void 0 : _a.email; // from auth middleware
+    const email = (_a = req.user) === null || _a === void 0 ? void 0 : _a.email;
     const file = req.file;
-    if (!email) {
-        throw new app_error_1.AppError(401, "Unauthorized: email not found in token");
-    }
-    if (!file) {
+    if (!email)
+        throw new app_error_1.AppError(401, "Unauthorized: email not found");
+    if (!file)
         throw new app_error_1.AppError(400, "No image file uploaded");
-    }
-    const uploaded = yield (0, cloudinaryUploader_1.uploadToCloudinary)(file.path);
-    if (!(uploaded === null || uploaded === void 0 ? void 0 : uploaded.url)) {
-        throw new app_error_1.AppError(500, "Failed to upload image to Cloudinary");
-    }
+    const uploaded = yield (0, cloudinaryUploader_1.uploadToCloudinary)(file);
     yield profile_service_1.profile_service.update_profile_image_into_db(email, uploaded.url);
     (0, send_response_1.sendResponse)(res, {
         success: true,

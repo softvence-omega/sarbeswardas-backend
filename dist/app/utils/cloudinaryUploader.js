@@ -16,36 +16,38 @@ exports.deleteFromCloudinary = exports.uploadToCloudinary = exports.upload = voi
 const multer_1 = __importDefault(require("multer"));
 const cloudinary_1 = require("cloudinary");
 const fs_1 = __importDefault(require("fs"));
-const path_1 = __importDefault(require("path"));
+const streamifier_1 = __importDefault(require("streamifier"));
 // Cloudinary Configuration
 cloudinary_1.v2.config({
     cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
     api_key: process.env.CLOUDINARY_API_KEY,
     api_secret: process.env.CLOUDINARY_API_SECRET,
 });
-// Multer Configuration
-const storage = multer_1.default.diskStorage({
-    destination: (req, file, cb) => {
-        const uploadPath = path_1.default.join(process.cwd(), "uploads");
-        if (!fs_1.default.existsSync(uploadPath)) {
-            fs_1.default.mkdirSync(uploadPath);
-        }
-        cb(null, uploadPath);
-    },
-    filename: (req, file, cb) => {
-        cb(null, `${Date.now()}-${file.originalname}`);
-    },
-});
-exports.upload = (0, multer_1.default)({ storage });
-// Cloudinary Upload Function
-const uploadToCloudinary = (filePath) => __awaiter(void 0, void 0, void 0, function* () {
+// Use memory storage (no writing to disk)
+exports.upload = (0, multer_1.default)({ storage: multer_1.default.memoryStorage() });
+// Accepts either a file path or a Multer file object
+const uploadToCloudinary = (file) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const result = yield cloudinary_1.v2.uploader.upload(filePath, {
-            folder: "uploads",
-        });
-        // Delete local file after upload
-        if (fs_1.default.existsSync(filePath)) {
-            fs_1.default.unlinkSync(filePath);
+        let result;
+        if (typeof file === "string") {
+            // case 1️⃣: local file path (used by AI or generated images)
+            result = yield cloudinary_1.v2.uploader.upload(file, { folder: "uploads" });
+            // delete local file if exists
+            if (fs_1.default.existsSync(file)) {
+                yield fs_1.default.promises.unlink(file);
+            }
+        }
+        else {
+            // case 2️⃣: multer memory buffer (used by routes)
+            result = yield new Promise((resolve, reject) => {
+                const uploadStream = cloudinary_1.v2.uploader.upload_stream({ folder: "uploads" }, (error, result) => {
+                    if (error)
+                        reject(error);
+                    else
+                        resolve(result);
+                });
+                streamifier_1.default.createReadStream(file.buffer).pipe(uploadStream);
+            });
         }
         return {
             url: result.secure_url,
@@ -54,14 +56,11 @@ const uploadToCloudinary = (filePath) => __awaiter(void 0, void 0, void 0, funct
     }
     catch (error) {
         console.error("❌ Cloudinary upload failed:", error);
-        // Cleanup on error
-        if (fs_1.default.existsSync(filePath))
-            fs_1.default.unlinkSync(filePath);
         throw new Error("Cloudinary upload failed");
     }
 });
 exports.uploadToCloudinary = uploadToCloudinary;
-//  Cloudinary Delete Function
+// Cloudinary Delete Function
 const deleteFromCloudinary = (publicId) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         yield cloudinary_1.v2.uploader.destroy(publicId);
