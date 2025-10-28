@@ -104,7 +104,7 @@ const logged_out_all_device = (0, catch_async_1.default)((req, res) => __awaiter
     });
 }));
 const login_user_with_google = (0, catch_async_1.default)((req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    const result = yield auth_service_1.auth_service.login_user_with_google_from_db(req === null || req === void 0 ? void 0 : req.body);
+    const result = yield auth_service_1.auth_service.login_user_with_google_from_db(req, req === null || req === void 0 ? void 0 : req.body);
     (0, send_response_1.sendResponse)(res, {
         success: true,
         statusCode: 200,
