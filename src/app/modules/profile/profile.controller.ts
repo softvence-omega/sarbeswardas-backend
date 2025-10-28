@@ -46,22 +46,13 @@ const update_profile_name = catchAsync(async (req, res) => {
 });
 
 export const update_profile_image = catchAsync(async (req, res) => {
-  const email = req.user?.email; // from auth middleware
+  const email = req.user?.email;
   const file = req.file;
 
-  if (!email) {
-    throw new AppError(401, "Unauthorized: email not found in token");
-  }
+  if (!email) throw new AppError(401, "Unauthorized: email not found");
+  if (!file) throw new AppError(400, "No image file uploaded");
 
-  if (!file) {
-    throw new AppError(400, "No image file uploaded");
-  }
-
-  const uploaded = await uploadToCloudinary(file.path);
-  if (!uploaded?.url) {
-    throw new AppError(500, "Failed to upload image to Cloudinary");
-  }
-
+  const uploaded = await uploadToCloudinary(file); 
   await profile_service.update_profile_image_into_db(email, uploaded.url);
 
   sendResponse(res, {
@@ -71,6 +62,7 @@ export const update_profile_image = catchAsync(async (req, res) => {
     data: { imageUrl: uploaded.url },
   });
 });
+
 
 export const profile_controller = {
   get_profile_info,
