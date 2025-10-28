@@ -1,7 +1,7 @@
-import multer, { StorageEngine } from "multer";
+import multer from "multer";
 import { v2 as cloudinary, UploadApiResponse } from "cloudinary";
 import fs from "fs";
-import path from "path";
+import streamifier from "streamifier";
 
 // Cloudinary Configuration
 cloudinary.config({
@@ -10,34 +10,36 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET!,
 });
 
-// Multer Configuration
-const storage: StorageEngine = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const uploadPath = path.join(process.cwd(), "uploads");
-    if (!fs.existsSync(uploadPath)) {
-      fs.mkdirSync(uploadPath, { recursive: true });
-    }
-    cb(null, uploadPath);
-  },
-  filename: (req, file, cb) => {
-    cb(null, `${Date.now()}-${file.originalname}`);
-  },
-});
+// Use memory storage (no writing to disk)
+export const upload = multer({ storage: multer.memoryStorage() });
 
-export const upload = multer({ storage });
-
-// Cloudinary Upload Function
+// Accepts either a file path or a Multer file object
 export const uploadToCloudinary = async (
-  filePath: string
+  file: string | Express.Multer.File
 ): Promise<{ url: string; public_id: string }> => {
   try {
-    const result: UploadApiResponse = await cloudinary.uploader.upload(filePath, {
-      folder: "uploads",
-    });
+    let result: UploadApiResponse;
 
-    // Delete local file after upload
-    if (fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
+    if (typeof file === "string") {
+      // case 1️⃣: local file path (used by AI or generated images)
+      result = await cloudinary.uploader.upload(file, { folder: "uploads" });
+
+      // delete local file if exists
+      if (fs.existsSync(file)) {
+        await fs.promises.unlink(file);
+      }
+    } else {
+      // case 2️⃣: multer memory buffer (used by routes)
+      result = await new Promise((resolve, reject) => {
+        const uploadStream = cloudinary.uploader.upload_stream(
+          { folder: "uploads" },
+          (error, result) => {
+            if (error) reject(error);
+            else resolve(result as UploadApiResponse);
+          }
+        );
+        streamifier.createReadStream(file.buffer).pipe(uploadStream);
+      });
     }
 
     return {
@@ -46,15 +48,11 @@ export const uploadToCloudinary = async (
     };
   } catch (error) {
     console.error("❌ Cloudinary upload failed:", error);
-
-    // Cleanup on error
-    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-
     throw new Error("Cloudinary upload failed");
   }
 };
 
-//  Cloudinary Delete Function
+// Cloudinary Delete Function
 export const deleteFromCloudinary = async (publicId: string): Promise<{ success: boolean }> => {
   try {
     await cloudinary.uploader.destroy(publicId);
