@@ -265,11 +265,8 @@ const logged_out_all_device_from_db = async (email: string) => {
   return "";
 };
 
-const login_user_with_google_from_db = async (payload: GooglePayload) => {
-  if (!payload) {
-    throw new AppError(400, "Missing Google data");
-  }
-  //  Validate input early
+const login_user_with_google_from_db = async (req: Request, payload: GooglePayload) => {
+  if (!payload) throw new AppError(400, "Missing Google data");
   if (!payload.email || !payload.provider || !payload.fullName) {
     throw new AppError(400, "Missing required Google login data");
   }
@@ -278,10 +275,8 @@ const login_user_with_google_from_db = async (payload: GooglePayload) => {
   session.startTransaction();
 
   try {
-    //  Find existing user
     let user = await User_Model.findOne({ email: payload.email }).session(session);
 
-    //  If user doesn’t exist, create one
     if (!user) {
       const newUsers = await User_Model.create(
         [
@@ -290,38 +285,55 @@ const login_user_with_google_from_db = async (payload: GooglePayload) => {
             provider: payload.provider,
             fullName: payload.fullName,
             isVerified: true,
-            profileImage: payload.photoUrl || undefined,
+            profileImage: payload.photoUrl || "",
           },
         ],
         { session }
       );
-
       user = newUsers[0];
     }
 
-    //  Commit transaction before using user
     await session.commitTransaction();
     session.endSession();
 
-    //  Post-checks after commit
     if (!user) throw new AppError(404, "Account not found");
     if (user.isDeleted) throw new AppError(403, "This account has been deleted");
     if (user.isActive === "INACTIVE") throw new AppError(403, "This account is blocked");
 
-    //  Generate JWT
+    // --- Device Login Tracking ---
+    const deviceId = uuidv4();
+    const userAgent = req.headers["user-agent"] || "Unknown";
+    let ip = req.ip || req.headers["x-forwarded-for"] || req.socket.remoteAddress;
+    if (Array.isArray(ip)) ip = ip[0];
+    if (typeof ip !== "string") ip = ip ? String(ip) : "Unknown";
+
+    const parser = new UAParser(userAgent);
+    const device = {
+      deviceId,
+      userAgent: `${parser.getBrowser().name} on ${parser.getOS().name}`,
+      ip,
+      loggedInAt: new Date(),
+    };
+
+    let updatedDevices = user.loggedInDevices || [];
+    updatedDevices.push(device);
+    if (updatedDevices.length > 3) {
+      updatedDevices = updatedDevices.slice(updatedDevices.length - 3);
+    }
+
+    user.loggedInDevices = updatedDevices;
+    await user.save();
+
+    // --- Generate JWT ---
     const accessToken = jwtHelpers.generateToken(
-      { email: user.email, userId: user._id },
+      { email: user.email, deviceId, userId: user._id },
       config.access_token_secret as string,
       config.access_token_expires_in as string
     );
 
-    return {
-      success: true,
-      message: user ? "Login successful" : "Account created successfully",
-      accessToken,
-    };
+    // --- Return exactly like login_user_into_db ---
+    return { accessToken };
   } catch (error) {
-    // Rollback if any failure
     await session.abortTransaction();
     session.endSession();
     throw new AppError(500, (error as Error).message || "Google login failed");
