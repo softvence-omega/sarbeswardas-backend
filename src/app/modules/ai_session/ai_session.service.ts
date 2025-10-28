@@ -23,7 +23,7 @@ const send_prompt_to_ai = async (
   userId: string,
   sessionId: string,
   prompt: string,
-  contentType: string,
+  contentType: string
 ): Promise<TSendPromptResult> => {
   const session = await mongoose.startSession();
   session.startTransaction();
@@ -461,6 +461,8 @@ const handle_ai_image = async (userId: string, sessionId: string, prompt: string
   const base64Data = aiResponse.url.split(";base64,").pop();
   const buffer = Buffer.from(base64Data!, "base64");
   const filePath = `uploads/${Date.now()}-${sessionId}.jpg`;
+
+  await fs.promises.mkdir("uploads", { recursive: true });
   await fs.promises.writeFile(filePath, buffer);
 
   const cloudinaryResult = await uploadToCloudinary(filePath);
