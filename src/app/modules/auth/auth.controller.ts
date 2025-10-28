@@ -113,7 +113,7 @@ const logged_out_all_device = catchAsync(async (req, res) => {
 });
 
 const login_user_with_google = catchAsync(async (req, res) => {
-  const result = await auth_service.login_user_with_google_from_db(req?.body);
+  const result = await auth_service.login_user_with_google_from_db(req, req?.body);
   sendResponse(res, {
     success: true,
     statusCode: 200,
