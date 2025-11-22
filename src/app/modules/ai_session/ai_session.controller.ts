@@ -7,7 +7,6 @@ import { sendResponse } from "../../utils/send_response";
 import { AppError } from "../../utils/app_error";
 
 /**
- * POST /api/chat/send
  * Send prompt to AI and get response
  */
 const send_prompt = catchAsync(async (req: Request, res: Response) => {
@@ -28,7 +27,6 @@ const send_prompt = catchAsync(async (req: Request, res: Response) => {
 });
 
 /**
- * GET /api/chat/session/:sessionId
  * Get conversation history for a session
  */
 const get_session_history = catchAsync(async (req: Request, res: Response) => {
@@ -46,7 +44,6 @@ const get_session_history = catchAsync(async (req: Request, res: Response) => {
 });
 
 /**
- * PUT /api/chat/prompt
  * Update prompt and regenerate response
  */
 const update_prompt = catchAsync(async (req: Request, res: Response) => {
@@ -69,7 +66,6 @@ const update_prompt = catchAsync(async (req: Request, res: Response) => {
 });
 
 /**
- * PATCH /api/chat/selection
  * Update selected adapter for a response
  */
 const update_selection = catchAsync(async (req: Request, res: Response) => {
@@ -91,7 +87,6 @@ const update_selection = catchAsync(async (req: Request, res: Response) => {
 });
 
 /**
- * DELETE /api/chat/session/:sessionId
  * Delete a session and all its messages
  */
 const delete_session = catchAsync(async (req: Request, res: Response) => {
@@ -108,7 +103,6 @@ const delete_session = catchAsync(async (req: Request, res: Response) => {
 });
 
 /**
- * GET /api/chat/sessions
  * Get all sessions for the current user
  */
 const get_user_sessions = catchAsync(async (req: Request, res: Response) => {
