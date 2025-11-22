@@ -1,4 +1,3 @@
-import { v4 as uuidv4 } from "uuid";
 import config from "../../config";
 import { AppError } from "../../utils/app_error";
 import { jwtHelpers } from "../../utils/JWT";
@@ -17,6 +16,12 @@ interface GooglePayload {
   fullName: string;
   photoUrl?: string;
 }
+
+// Helper to generate UUID dynamically (ESM-safe)
+const generateUUID = async () => {
+  const { v4: uuidv4 } = await import("uuid");
+  return uuidv4();
+};
 
 const sign_up_user_into_db = async (payload: TUser) => {
   const { email, password } = payload;
@@ -65,7 +70,6 @@ const sign_up_user_into_db = async (payload: TUser) => {
   `;
 
   // await sendEmail(email, "Your OTP", emailTemp);
-  // return "Check your email for OTP";
   return "User register successfully";
 };
 
@@ -81,7 +85,11 @@ const verify_email_into_db = async (payload: { email: string; otp: string }) => 
     throw new AppError(403, "Wrong OTP");
   }
 
-  const result = await User_Model.findOneAndUpdate({ email }, { isVerified: true }, { new: true });
+  const result = await User_Model.findOneAndUpdate(
+    { email },
+    { isVerified: true },
+    { new: true }
+  );
   if (!result) {
     throw new AppError(500, "Failed to update verify status");
   }
@@ -89,7 +97,10 @@ const verify_email_into_db = async (payload: { email: string; otp: string }) => 
   return "";
 };
 
-const login_user_into_db = async (req: Request, payload: { email: string; password: string }) => {
+const login_user_into_db = async (
+  req: Request,
+  payload: { email: string; password: string }
+) => {
   const { email, password } = payload;
 
   if (!email || !password) {
@@ -107,22 +118,17 @@ const login_user_into_db = async (req: Request, payload: { email: string; passwo
   }
 
   const isPasswordMatch = await bcrypt.compare(password, user?.password as string);
-
   if (!isPasswordMatch) {
     throw new AppError(403, "Wrong password!!");
   }
 
-  const deviceId = uuidv4();
+  const deviceId = await generateUUID();
+
   const userAgent = req.headers["user-agent"] || "Unknown";
   let ip = req.ip || req.headers["x-forwarded-for"] || req.socket.remoteAddress;
-  if (Array.isArray(ip)) {
-    ip = ip[0];
-  }
-  if (typeof ip !== "string") {
-    ip = ip ? String(ip) : "Unknown";
-  }
+  if (Array.isArray(ip)) ip = ip[0];
+  if (typeof ip !== "string") ip = ip ? String(ip) : "Unknown";
 
-  // Parse device info
   const parser = new UAParser(userAgent);
   const device = {
     deviceId,
@@ -130,20 +136,16 @@ const login_user_into_db = async (req: Request, payload: { email: string; passwo
     ip,
     loggedInAt: new Date(),
   };
-  console.log({ device });
 
-  // Keep only last 2–3 devices
   let updatedDevices = user.loggedInDevices || [];
   updatedDevices.push(device);
   if (updatedDevices.length > 3) {
-    // remove the oldest login
     updatedDevices = updatedDevices.slice(updatedDevices.length - 3);
   }
 
   user.loggedInDevices = updatedDevices;
   await user.save();
 
-  // Generate JWT including deviceId
   const accessToken = jwtHelpers.generateToken(
     { email: user.email, deviceId, userId: user._id },
     config.access_token_secret as string,
@@ -185,6 +187,7 @@ const change_password_into_db = async (payload: {
   return updatedUser;
 };
 
+// === Forgot / Reset Password ===
 const forgot_password = async (emailInput: string | { email: string }) => {
   const email = typeof emailInput === "string" ? emailInput : emailInput.email;
 
@@ -195,7 +198,6 @@ const forgot_password = async (emailInput: string | { email: string }) => {
   await User_Model.findOneAndUpdate({ email }, { lastOTP: otp });
 
   const otpDigits = otp.split("");
-
   const emailTemp = `
     <table ...>
       ...
@@ -217,24 +219,15 @@ const forgot_password = async (emailInput: string | { email: string }) => {
       ...
     </table>
   `;
-
   await sendEmail(email, "Your OTP", emailTemp);
   return "Check your email for OTP";
-
-  // const result = await sendEmailWithBrevo(email, "Your forgot password OTP", emailTemp);
-  // console.log(result);
-
-  // const resendResponse = await sendEmailWithResend(email, "Your forgot password OTP", emailTemp);
-  // console.log(resendResponse);
-  // return resendResponse;
 };
 
 const reset_password_into_db = async (email: string, otp: string, newPassword: string) => {
   const user = await User_Model.findOne({ email });
   if (!user) throw new AppError(404, "User not found");
 
-  const verifyOTP = user.lastOTP === otp;
-  if (!verifyOTP) {
+  if (user.lastOTP !== otp) {
     throw new AppError(409, "Invalid OTP");
   }
 
@@ -249,25 +242,22 @@ const reset_password_into_db = async (email: string, otp: string, newPassword: s
   return "";
 };
 
+// === Logout / Google Login / Delete ===
 const logged_out_all_device_from_db = async (email: string) => {
   const user = await User_Model.findOne({ email, isDeleted: false });
-
-  if (!user) {
-    throw new AppError(404, "User not found");
-  }
+  if (!user) throw new AppError(404, "User not found");
 
   user.loggedInDevices = [];
   const updatedUser = await user.save();
   if (!updatedUser) {
-    throw new AppError(500, "Failed to logged out from all device");
+    throw new AppError(500, "Failed to log out from all devices");
   }
 
   return "";
 };
 
 const login_user_with_google_from_db = async (req: Request, payload: GooglePayload) => {
-  if (!payload) throw new AppError(400, "Missing Google data");
-  if (!payload.email || !payload.provider || !payload.fullName) {
+  if (!payload || !payload.email || !payload.provider || !payload.fullName) {
     throw new AppError(400, "Missing required Google login data");
   }
 
@@ -300,8 +290,7 @@ const login_user_with_google_from_db = async (req: Request, payload: GooglePaylo
     if (user.isDeleted) throw new AppError(403, "This account has been deleted");
     if (user.isActive === "INACTIVE") throw new AppError(403, "This account is blocked");
 
-    // --- Device Login Tracking ---
-    const deviceId = uuidv4();
+    const deviceId = await generateUUID();
     const userAgent = req.headers["user-agent"] || "Unknown";
     let ip = req.ip || req.headers["x-forwarded-for"] || req.socket.remoteAddress;
     if (Array.isArray(ip)) ip = ip[0];
@@ -324,14 +313,12 @@ const login_user_with_google_from_db = async (req: Request, payload: GooglePaylo
     user.loggedInDevices = updatedDevices;
     await user.save();
 
-    // --- Generate JWT ---
     const accessToken = jwtHelpers.generateToken(
       { email: user.email, deviceId, userId: user._id },
       config.access_token_secret as string,
       config.access_token_expires_in as string
     );
 
-    // --- Return exactly like login_user_into_db ---
     return { accessToken };
   } catch (error) {
     await session.abortTransaction();
@@ -341,20 +328,15 @@ const login_user_with_google_from_db = async (req: Request, payload: GooglePaylo
 };
 
 const delete_account_from_db = async (userId: string) => {
-  const user = User_Model.findById(userId);
-  if (!user) {
-    throw new AppError(404, "User not found");
-  }
+  const user = await User_Model.findById(userId);
+  if (!user) throw new AppError(404, "User not found");
 
   const updatedUser = await User_Model.findByIdAndUpdate(
     userId,
     { isDeleted: true },
     { new: true }
   );
-
-  if (!updatedUser) {
-    throw new AppError(500, "Failed to delete account");
-  }
+  if (!updatedUser) throw new AppError(500, "Failed to delete account");
 
   return updatedUser;
 };
@@ -370,27 +352,3 @@ export const auth_service = {
   login_user_with_google_from_db,
   delete_account_from_db,
 };
-
-// Generate token valid for 1 hour
-// const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET as string, {
-//   expiresIn: "1h",
-// });
-
-// // Create verification link
-// const verifyUrl = `${process.env.FRONTEND_URL}/verify-email?token=${token}`;
-
-// // Email content
-// const html = `
-//   <div>
-//     <h3>Welcome to Our App</h3>
-//     <p>Click below to verify your email:</p>
-//     <a href="${verifyUrl}"
-//        style="background: #007bff; color: white; padding: 10px 20px;
-//        text-decoration: none; border-radius: 4px;">
-//        Verify Email
-//     </a>
-//   </div>
-// `;
-
-// // Send email
-// await sendEmail(email, "Verify your email", html);

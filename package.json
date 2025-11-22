@@ -8,7 +8,12 @@
     "lint:fix": "eslint src --ext .ts --fix",
     "format": "prettier --write .",
     "build": "tsc",
-    "dev": "ts-node-dev --respawn --transpile-only src/server.ts"
+    "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
+    "start": "node dist/server.js",
+    "docker:build": "docker build -t robiul93093/sarbeswardas-backend:latest .",
+    "docker:run": "docker run --env-file .env -p 5000:5000 robiul93093/sarbeswardas-backend:latest",
+    "docker:up": "docker-compose up --build -d",
+    "docker:down": "docker-compose down"
   },
   "keywords": [],
   "author": "",
@@ -32,6 +37,7 @@
     "ts-node-dev": "^2.0.0",
     "ua-parser-js": "^2.0.6",
     "uuid": "^13.0.0",
+    "uuidv4": "^6.2.13",
     "zod": "^4.1.12"
   },
   "devDependencies": {
