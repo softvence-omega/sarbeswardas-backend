@@ -1,11 +1,12 @@
 // src/modules/chat/chat.service.ts
 
 import axios, { AxiosError } from "axios";
-import mongoose from "mongoose";
+import mongoose, { ClientSession } from "mongoose";
 import fs from "fs";
 import {
   TAdapterResponse,
   TAIServiceResponse,
+  TChatMessage,
   TConversationHistory,
   TSendPromptResult,
   TSessionSummary,
@@ -16,27 +17,22 @@ import { uploadToCloudinary } from "../../utils/cloudinaryUploader";
 // import { fs } from 'fs';
 import { call_ai_image_service } from "../../utils/call_ai_image_service";
 
-/**
- * Send prompt to AI and store response
- */
+//Send prompt to AI and store response
 const send_prompt_to_ai = async (
   userId: string,
   sessionId: string,
   prompt: string,
-  contentType: string
+  contentType: "text" | "image"
 ): Promise<TSendPromptResult> => {
   const session = await mongoose.startSession();
   session.startTransaction();
 
   try {
-    // 1. Ensure session exists
     await ensure_session_exists(userId, sessionId, session, prompt);
-
-    // 2. Get next sequence number
     const sequenceNumber = await get_next_sequence_number(sessionId);
 
-    // 3. Store prompt BEFORE calling AI
-    const [promptMessage] = await ChatMessage_Model.create(
+    // Save prompt message
+    await ChatMessage_Model.create(
       [
         {
           sessionId,
@@ -49,29 +45,52 @@ const send_prompt_to_ai = async (
       { session }
     );
 
-    // 4. Commit transaction for prompt
     await session.commitTransaction();
 
-    // 5. Call AI service (outside transaction)
+    // Call AI service
     let aiResponse: TAIServiceResponse;
     try {
       aiResponse = await call_ai_service(sessionId, prompt);
-    } catch (error) {
-      throw new AppError(502, "AI service is unavailable. Please try again later.");
+    } catch (err) {
+      throw new AppError(502, "AI service unavailable");
     }
 
-    // 6. Store AI response in new transaction
+    // Store AI response
     const responseSession = await mongoose.startSession();
     responseSession.startTransaction();
-
     try {
-      await store_ai_response(sessionId, userId, sequenceNumber, aiResponse, responseSession);
+      await store_ai_response(
+        sessionId,
+        userId,
+        sequenceNumber,
+        aiResponse,
+        responseSession,
+        contentType
+      );
       await responseSession.commitTransaction();
-    } catch (error) {
+    } catch (err) {
       await responseSession.abortTransaction();
-      throw error;
+      throw err;
     } finally {
       responseSession.endSession();
+    }
+
+    // Return type-safe result
+    if (contentType === "image") {
+      // For image responses, adapt to TSendPromptResult shape by placing image info into the response.selected fields.
+      const anyResp = aiResponse as any;
+      return {
+        sessionId,
+        sequenceNumber,
+        prompt,
+        response: {
+          selected: {
+            adapter: anyResp.adapter ?? "",
+            text: anyResp.imageUrl ?? "",
+          },
+          allResponses: [],
+        },
+      } as TSendPromptResult;
     }
 
     return {
@@ -82,25 +101,21 @@ const send_prompt_to_ai = async (
         selected: aiResponse.selected,
         allResponses: aiResponse.responses,
       },
-    };
+    } as TSendPromptResult;
   } catch (error) {
-    if (session.inTransaction()) {
-      await session.abortTransaction();
-    }
+    if (session.inTransaction()) await session.abortTransaction();
     throw error;
   } finally {
     session.endSession();
   }
 };
 
-/**
- * Get conversation history
- */
-const get_session_history_from_db = async (
+// Get conversation history
+export const get_session_history_from_db = async (
   userId: string,
   sessionId: string
 ): Promise<TConversationHistory> => {
-  // Verify session ownership
+  // 1️⃣ Verify session ownership
   const session = await ChatSession_Model.findOne({
     sessionId,
     userId,
@@ -111,7 +126,7 @@ const get_session_history_from_db = async (
     throw new AppError(404, "Session not found or access denied");
   }
 
-  // Get all messages
+  // 2️⃣ Fetch all chat messages
   const messages = await ChatMessage_Model.find({
     sessionId,
     isDeleted: false,
@@ -122,7 +137,7 @@ const get_session_history_from_db = async (
   if (messages.length === 0) {
     return {
       sessionId,
-      userId: userId,
+      userId,
       messages: [],
       totalMessages: 0,
       createdAt: session.createdAt!,
@@ -130,43 +145,99 @@ const get_session_history_from_db = async (
     };
   }
 
-  // Get response message IDs
-  const responseMessageIds = messages.filter((m) => m.messageType === "response").map((m) => m._id);
+  // 3️⃣ Collect all response message IDs
+  const responseMessageIds = messages
+    .filter((m) => m.messageType === "response")
+    .map((m) => m._id);
 
-  // Get all adapter responses
   const adapterResponses = await AdapterResponse_Model.find({
     messageId: { $in: responseMessageIds },
   }).lean();
 
-  // Group by message ID
-  const adapterResponseMap = new Map<string, TAdapterResponse[]>();
+  // 4️⃣ Group adapter responses by messageId
+  const adapterResponseMap = new Map<string, any[]>();
   adapterResponses.forEach((ar) => {
     const msgId = ar.messageId.toString();
     if (!adapterResponseMap.has(msgId)) {
       adapterResponseMap.set(msgId, []);
     }
-    adapterResponseMap.get(msgId)!.push({
-      adapter: ar.adapter,
-      text: ar.text ?? "",
-    });
+    adapterResponseMap.get(msgId)!.push(ar);
   });
 
-  // Group messages by sequence
-  const conversationMessages = group_messages_by_sequence(messages, adapterResponseMap);
+  // 5️⃣ Build conversation messages
+  const conversationMessages: any[] = [];
 
+  const groupedBySequence = new Map<number, any>();
+  for (const msg of messages) {
+    if (!groupedBySequence.has(msg.sequenceNumber)) {
+      groupedBySequence.set(msg.sequenceNumber, []);
+    }
+    groupedBySequence.get(msg.sequenceNumber).push(msg);
+  }
+
+  for (const [sequenceNumber, group] of groupedBySequence.entries()) {
+    const promptMsg = group.find((m: any) => m.messageType === "prompt");
+    const responseMsg = group.find((m: any) => m.messageType === "response");
+
+    if (!responseMsg) continue;
+
+    const adapterList = adapterResponseMap.get(responseMsg._id.toString()) || [];
+    const selectedAdapter = adapterList.find((ar) => ar.isSelected);
+
+    // 🟢 CASE 1: TEXT MESSAGE
+    if (responseMsg.contentType === "text") {
+      const allResponses = adapterList.map((ar) => ({
+        adapter: ar.adapter,
+        text: ar.text || "",
+      }));
+
+      conversationMessages.push({
+        sequenceNumber,
+        contentType: "text",
+        prompt: promptMsg?.content || "",
+        response: {
+          selected: selectedAdapter
+            ? {
+                adapter: selectedAdapter.adapter,
+                text: selectedAdapter.text || "",
+              }
+            : { adapter: "", text: "" },
+          allResponses,
+        },
+        timestamp: responseMsg.createdAt,
+      });
+    }
+
+    // 🟢 CASE 2: IMAGE MESSAGE
+    else if (responseMsg.contentType === "image" && selectedAdapter?.image?.url) {
+      conversationMessages.push({
+        sequenceNumber,
+        contentType: "image",
+        sessionId,
+        prompt: selectedAdapter.text || promptMsg?.content || "",
+        imageUrl: selectedAdapter.image.url,
+        adapter: selectedAdapter.adapter,
+        messageId: responseMsg._id,
+        adapterResponseId: selectedAdapter._id,
+        timestamp: responseMsg.createdAt,
+      });
+    }
+  }
+
+  // 6️⃣ Return final structured history
   return {
     sessionId,
-    userId: userId,
-    messages: conversationMessages,
+    userId,
+    messages: conversationMessages.sort((a, b) => a.sequenceNumber - b.sequenceNumber),
     totalMessages: conversationMessages.length,
     createdAt: session.createdAt!,
     updatedAt: session.updatedAt!,
   };
 };
 
-/**
- * Update prompt and regenerate response
- */
+
+
+//Update prompt and regenerate response
 const update_prompt_in_db = async (
   userId: string,
   sessionId: string,
@@ -257,9 +328,7 @@ const update_prompt_in_db = async (
   }
 };
 
-/**
- * Update selected adapter
- */
+//Update selected adapter
 const update_selected_adapter_in_db = async (
   userId: string,
   sessionId: string,
@@ -313,9 +382,7 @@ const update_selected_adapter_in_db = async (
   );
 };
 
-/**
- * Delete session
- */
+//Delete session
 const delete_session_from_db = async (userId: string, sessionId: string): Promise<void> => {
   const mongoSession = await mongoose.startSession();
   mongoSession.startTransaction();
@@ -363,9 +430,7 @@ const delete_session_from_db = async (userId: string, sessionId: string): Promis
   }
 };
 
-/**
- * Get user sessions
- */
+// Get user sessions
 const get_user_sessions_from_db = async (
   userId: string,
   limit: number = 50,
@@ -434,69 +499,118 @@ const update_session_title_into_bd = async (sessionId: string, newTitle: string)
 };
 
 const handle_ai_image = async (userId: string, sessionId: string, prompt: string) => {
-  // 1 Ensure session exists
   const session = await mongoose.startSession();
   session.startTransaction();
+
   try {
+    // 1️⃣ Ensure session exists
     await ensure_session_exists(userId, sessionId, session, prompt);
+
+    // 2️⃣ Call AI Image API
+    const aiResponse = await call_ai_image_service({
+      session_id: sessionId,
+      prompt,
+      size: "1024x1024",
+      compress: true,
+      max_size_kb: 500,
+    });
+
+    // 🔹 Check if the AI returned a valid image URL
+    if (!aiResponse.url) {
+      console.error("❌ AI image service did not return a URL", aiResponse);
+      throw new AppError(
+        502,
+        "AI service did not return an image URL. Please try a different prompt."
+      );
+    }
+
+    // 3️⃣ Convert base64 -> file and upload to Cloudinary
+    const base64Data = aiResponse.url.split(";base64,").pop();
+    const buffer = Buffer.from(base64Data!, "base64");
+    const filePath = `uploads/${Date.now()}-${sessionId}.jpg`;
+
+    await fs.promises.mkdir("uploads", { recursive: true });
+    await fs.promises.writeFile(filePath, buffer);
+
+    const cloudinaryResult = await uploadToCloudinary(filePath);
+
+    // 🔍 Debug: Check cloudinary result
+    console.log("📸 Cloudinary Result:", JSON.stringify(cloudinaryResult, null, 2));
+
+    // 4️⃣ Save main ChatMessage
+    const [message] = await ChatMessage_Model.create(
+      [
+        {
+          sessionId,
+          messageType: "response",
+          sequenceNumber: Date.now(),
+          content: "[IMAGE_GENERATED]",
+          contentType: "image", // 👈 VERY IMPORTANT
+          selectedAdapter: aiResponse.adapter,
+          userId,
+        },
+      ],
+      { session }
+    );
+    console.log("💬 Message Created:", message);
+
+    // 5️⃣ Prepare adapter response data (matching schema field names)
+    const adapterResponseData = {
+      messageId: message._id.toString(), // 👈 Convert to string (schema expects String)
+      adapter: aiResponse.adapter,
+      text: prompt,
+      image: {
+        url: cloudinaryResult.url,
+        compressed: aiResponse.compressed ?? false,
+        original_size_kb: aiResponse.original_size_kb ?? 0, // 👈 Use underscore (matches schema)
+        compressed_size_kb: aiResponse.compressed_size_kb ?? 0, // 👈 Use underscore (matches schema)
+      },
+      isSelected: true,
+    };
+
+    // 🔍 Debug: Check data before saving
+    console.log("📦 Adapter Response Data:", JSON.stringify(adapterResponseData, null, 2));
+
+    // Save AdapterResponse
+    const [createdAdapter] = await AdapterResponse_Model.create(
+      [adapterResponseData],
+      { session }
+    );
+
+    // 🔍 Debug: Check saved document
+    console.log("✅ Adapter Response Created:", JSON.stringify(createdAdapter.toObject(), null, 2));
+
+    // 6️⃣ Update session timestamp
+    await ChatSession_Model.findOneAndUpdate(
+      { sessionId },
+      { updatedAt: new Date() },
+      { session }
+    );
+
     await session.commitTransaction();
+    session.endSession();
+
+    // 🧹 Clean up temporary file
+    try {
+      await fs.promises.unlink(filePath);
+    } catch (err) {
+      console.warn("⚠️ Failed to delete temp file:", filePath);
+    }
+
+    // 7️⃣ Return clean response
+    return {
+      sessionId,
+      prompt,
+      imageUrl: cloudinaryResult.url,
+      adapter: aiResponse.adapter,
+      messageId: message._id,
+      adapterResponseId: createdAdapter._id,
+    };
   } catch (err) {
     if (session.inTransaction()) await session.abortTransaction();
     session.endSession();
     throw err;
-  } finally {
-    session.endSession();
   }
-
-  // 2️⃣ Call AI Image API
-  const aiResponse = await call_ai_image_service({
-    session_id: sessionId,
-    prompt,
-    size: "1024x1024",
-    compress: true,
-    max_size_kb: 500,
-  });
-
-  // 3️⃣ Convert base64 -> file and upload to Cloudinary
-  const base64Data = aiResponse.url.split(";base64,").pop();
-  const buffer = Buffer.from(base64Data!, "base64");
-  const filePath = `uploads/${Date.now()}-${sessionId}.jpg`;
-
-  await fs.promises.mkdir("uploads", { recursive: true });
-  await fs.promises.writeFile(filePath, buffer);
-
-  const cloudinaryResult = await uploadToCloudinary(filePath);
-
-  // 4️⃣ Store image response in DB (message + adapter)
-  const message = await ChatMessage_Model.create({
-    sessionId,
-    messageType: "response",
-    sequenceNumber: Date.now(), // or your normal sequence system
-    content: "[IMAGE_GENERATED]",
-    selectedAdapter: aiResponse.adapter,
-    userId,
-  });
-
-  await AdapterResponse_Model.create({
-    messageId: message._id,
-    adapter: aiResponse.adapter,
-    text: prompt, // store prompt text for reference
-    image: {
-      url: cloudinaryResult.url,
-      publicId: cloudinaryResult.public_id,
-      compressed: aiResponse.compressed,
-      originalSizeKb: aiResponse.original_size_kb,
-      compressedSizeKb: aiResponse.compressed_size_kb,
-    },
-    isSelected: true,
-  });
-
-  return {
-    sessionId,
-    prompt,
-    imageUrl: cloudinaryResult.url,
-    adapter: aiResponse.adapter,
-  };
 };
 
 // ============= Helper Functions =============
@@ -544,30 +658,51 @@ const store_ai_response = async (
   userId: string,
   sequenceNumber: number,
   aiResponse: TAIServiceResponse,
-  session: mongoose.ClientSession
+  session: ClientSession,
+  contentType: "text" | "image" = "text"
 ): Promise<void> => {
-  const [responseMessage] = await ChatMessage_Model.create(
-    [
-      {
-        sessionId,
-        messageType: "response",
-        sequenceNumber,
-        content: aiResponse.selected.text,
-        selectedAdapter: aiResponse.selected.adapter,
-        userId,
-      },
-    ],
-    { session }
-  );
+  let responseMessage: TChatMessage & { _id: mongoose.Types.ObjectId };
 
-  const adapterResponses = aiResponse.responses.map((resp) => ({
-    messageId: responseMessage._id,
-    adapter: resp.adapter,
-    text: resp.text,
-    isSelected: resp.adapter === aiResponse.selected.adapter,
-  }));
+  if (contentType === "image") {
+    [responseMessage] = await ChatMessage_Model.create(
+      [
+        {
+          sessionId,
+          messageType: "response",
+          sequenceNumber,
+          content: (aiResponse as any).imageUrl, // store image URL
+          selectedAdapter: (aiResponse as any).adapter,
+          userId,
+          contentType: "image",
+        },
+      ],
+      { session }
+    );
+  } else {
+    [responseMessage] = await ChatMessage_Model.create(
+      [
+        {
+          sessionId,
+          messageType: "response",
+          sequenceNumber,
+          content: aiResponse.selected.text,
+          selectedAdapter: aiResponse.selected.adapter,
+          userId,
+          contentType: "text",
+        },
+      ],
+      { session }
+    );
 
-  await AdapterResponse_Model.insertMany(adapterResponses, { session });
+    const adapterResponses = aiResponse.responses.map((resp) => ({
+      messageId: responseMessage._id,
+      adapter: resp.adapter,
+      text: resp.text,
+      isSelected: resp.adapter === aiResponse.selected.adapter,
+    }));
+
+    await AdapterResponse_Model.insertMany(adapterResponses, { session });
+  }
 
   await ChatSession_Model.findOneAndUpdate({ sessionId }, { updatedAt: new Date() }, { session });
 };
