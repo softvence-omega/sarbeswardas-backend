@@ -14,7 +14,8 @@ app.post(
   handle_stripe_webhook
 );
 
-app.get("/payment/success", (req, res) => console.log("Payment successful "));
+// app.get("/payment/success", (req, res) => console.log("Payment successful "));
+// app.get("/payment/cancel", (req, res) => console.log("Payment cancel "));
 
 // parsers
 app.use(useragent.express());
