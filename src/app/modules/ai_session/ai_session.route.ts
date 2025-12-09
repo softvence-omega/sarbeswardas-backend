@@ -27,6 +27,6 @@ router.get("/sessions", auth(), chat_controller.get_user_sessions);
 router.patch("/session/update-title", auth(), chat_controller.update_session_title);
 
 /***/
-router.post("/generate-image", auth(), chat_controller.generate_ai_image);
+router.post("/generate-image", auth(), verifySubscription(), chat_controller.generate_ai_image);
 
 export const chatRouter = router;

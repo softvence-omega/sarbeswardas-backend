@@ -69,7 +69,8 @@ const sign_up_user_into_db = async (payload: TUser) => {
     </table>
   `;
 
-  // await sendEmail(email, "Your OTP", emailTemp);
+  const res = await sendEmail(email, "Your OTP", emailTemp);
+  console.log("res :", res)
   return "User register successfully";
 };
 
@@ -219,7 +220,8 @@ const forgot_password = async (emailInput: string | { email: string }) => {
       ...
     </table>
   `;
-  await sendEmail(email, "Your OTP", emailTemp);
+  const res = await sendEmail(email, "Your OTP", emailTemp);
+  console.log("res :", res)
   return "Check your email for OTP";
 };
 

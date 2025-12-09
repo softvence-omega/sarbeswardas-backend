@@ -64,28 +64,63 @@ export const handle_stripe_webhook = async (req: Request, res: Response) => {
         break;
       }
 
-      // ✅ Subscription updated or deleted
-      case "customer.subscription.updated":
-      case "customer.subscription.deleted": {
+      // ✅ Subscription updated
+      case "customer.subscription.updated": {
         const subscription = event.data.object as Stripe.Subscription;
-
         await User_Model.findOneAndUpdate(
           { stripeCustomerId: subscription.customer },
-          { subscriptionStatus: subscription.status },
-          { new: true }
+          {
+            subscriptionStatus: subscription.status,
+            trialEndsAt: subscription.trial_end
+              ? new Date(subscription.trial_end * 1000)
+              : null,
+          }
         );
-
-        console.log(
-          `🔔 Subscription status updated for customer ${subscription.customer}: ${subscription.status}`
-        );
+        console.log(`🔔 Subscription updated for ${subscription.customer}: ${subscription.status}`);
         break;
       }
 
-      // PaymentIntent succeeded (one-time payments)
+      // ❌ Subscription deleted
+      case "customer.subscription.deleted": {
+        const subscription = event.data.object as Stripe.Subscription;
+        await User_Model.findOneAndUpdate(
+          { stripeCustomerId: subscription.customer },
+          { subscriptionStatus: "canceled" } // Explicitly set to canceled or 'none'
+        );
+        console.log(`❌ Subscription deleted for ${subscription.customer}`);
+        break;
+      }
+
+      // 💰 Invoice payment succeeded (Renewals)
+      case "invoice.payment_succeeded": {
+        const invoice = event.data.object as Stripe.Invoice;
+        if ((invoice as any).subscription) {
+          await User_Model.findOneAndUpdate(
+            { stripeCustomerId: invoice.customer },
+            { subscriptionStatus: "active" }
+          );
+          console.log(`✅ Invoice paid for ${invoice.customer}, subscription active.`);
+        }
+        break;
+      }
+
+      // ⚠️ Invoice payment failed
+      case "invoice.payment_failed": {
+        const invoice = event.data.object as Stripe.Invoice;
+        if ((invoice as any).subscription) {
+          await User_Model.findOneAndUpdate(
+            { stripeCustomerId: invoice.customer },
+            { subscriptionStatus: "past_due" }
+          );
+          console.warn(`⚠️ Invoice payment failed for ${invoice.customer}, status: past_due`);
+        }
+        break;
+      }
+
+      // PaymentIntent succeeded (one-time payments - optional if not using one-time)
       case "payment_intent.succeeded": {
         const paymentIntent = event.data.object as Stripe.PaymentIntent;
         console.log("💰 PaymentIntent succeeded:", paymentIntent.id);
-        // TODO: Add your payment handling logic here (update orders, notify user, etc.)
         break;
       }
 
@@ -93,7 +128,6 @@ export const handle_stripe_webhook = async (req: Request, res: Response) => {
       case "charge.succeeded": {
         const charge = event.data.object as Stripe.Charge;
         console.log("💳 Charge succeeded:", charge.id);
-        // TODO: Add your charge handling logic here
         break;
       }
 
@@ -152,8 +186,21 @@ const stripe_checkout = catchAsync(async (req, res) => {
   });
 });
 
+const cancel_subscription = catchAsync(async (req, res) => {
+  const userId = req.user?.userId;
+  const result = await plan_service.cancel_subscription(userId);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: 200,
+    message: "Subscription canceled successfully",
+    data: result,
+  });
+});
+
 export const plan_controller = {
   get_all_plan,
   create_plan,
   stripe_checkout,
+  cancel_subscription,
 };
