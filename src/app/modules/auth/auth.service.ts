@@ -43,7 +43,11 @@ const sign_up_user_into_db = async (payload: TUser) => {
   }
 
   const otp = OTPMaker();
-  await User_Model.findOneAndUpdate({ email }, { lastOTP: otp });
+  const otpExpiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes expiration
+  await User_Model.findOneAndUpdate(
+    { email },
+    { lastOTP: otp, otpExpiresAt }
+  );
 
   const otpDigits = otp.split("");
 
@@ -69,8 +73,8 @@ const sign_up_user_into_db = async (payload: TUser) => {
     </table>
   `;
 
-  const res = await sendEmail(email, "Your OTP", emailTemp);
-  console.log("res :", res)
+  await sendEmail(email, "Your OTP", emailTemp);
+
   return "User register successfully";
 };
 
@@ -86,11 +90,11 @@ const verify_email_into_db = async (payload: { email: string; otp: string }) => 
     throw new AppError(403, "Wrong OTP");
   }
 
-  const result = await User_Model.findOneAndUpdate(
-    { email },
-    { isVerified: true },
-    { new: true }
-  );
+  if (user.otpExpiresAt && new Date() > user.otpExpiresAt) {
+    throw new AppError(403, "OTP expired. Please request a new one.");
+  }
+
+  const result = await User_Model.findOneAndUpdate({ email }, { isVerified: true }, { new: true });
   if (!result) {
     throw new AppError(500, "Failed to update verify status");
   }
@@ -98,10 +102,7 @@ const verify_email_into_db = async (payload: { email: string; otp: string }) => 
   return "";
 };
 
-const login_user_into_db = async (
-  req: Request,
-  payload: { email: string; password: string }
-) => {
+const login_user_into_db = async (req: Request, payload: { email: string; password: string }) => {
   const { email, password } = payload;
 
   if (!email || !password) {
@@ -196,7 +197,11 @@ const forgot_password = async (emailInput: string | { email: string }) => {
   if (!user) throw new AppError(404, "User not found");
 
   const otp = OTPMaker();
-  await User_Model.findOneAndUpdate({ email }, { lastOTP: otp });
+  const otpExpiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes expiration
+  await User_Model.findOneAndUpdate(
+    { email },
+    { lastOTP: otp, otpExpiresAt }
+  );
 
   const otpDigits = otp.split("");
   const emailTemp = `
@@ -221,7 +226,7 @@ const forgot_password = async (emailInput: string | { email: string }) => {
     </table>
   `;
   const res = await sendEmail(email, "Your OTP", emailTemp);
-  console.log("res :", res)
+  console.log("res :", res);
   return "Check your email for OTP";
 };
 
@@ -231,6 +236,10 @@ const reset_password_into_db = async (email: string, otp: string, newPassword: s
 
   if (user.lastOTP !== otp) {
     throw new AppError(409, "Invalid OTP");
+  }
+
+  if (user.otpExpiresAt && new Date() > user.otpExpiresAt) {
+    throw new AppError(403, "OTP expired. Please request a new one.");
   }
 
   const newHashedPassword = await bcrypt.hash(newPassword, 10);
