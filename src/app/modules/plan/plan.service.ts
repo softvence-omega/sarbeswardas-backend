@@ -24,13 +24,13 @@ const create_checkout_session = async (userId: string, planId: string) => {
 
     const plan = await Plan_Model.findById(planId);
     if (!plan) throw new AppError(404, "Plan not found");
-console.log("user: ",user)
+    console.log("user: ", user);
     if (!user.stripeCustomerId) {
       const customer = await stripe.customers.create({
         email: user.email,
         name: user.fullName,
       });
-      console.log("stripe customer: ", customer)
+      console.log("stripe customer: ", customer);
       user.stripeCustomerId = customer.id;
       await user.save();
     }
@@ -51,17 +51,39 @@ console.log("user: ",user)
     };
 
     //  Give trial only if user hasn’t used it before
-    // if (!user.hasUsedTrial) {
-    //   sessionConfig.subscription_data = {
-    //     trial_period_days: 30,
-    //   };
-    // }
+    //  Give trial only if user hasn’t used it before
+    if (!user.hasUsedTrial) {
+      sessionConfig.subscription_data = {
+        trial_period_days: 7,
+      };
+    }
 
     const session = await stripe.checkout.sessions.create(sessionConfig);
     return { url: session.url };
   } catch (error) {
-    console.error(error);
     throw new AppError(500, "Error creating checkout session");
+  }
+};
+
+const cancel_subscription = async (userId: string) => {
+  const user = await User_Model.findById(userId);
+  if (!user) throw new AppError(404, "User not found");
+
+  if (!user.subscriptionId) {
+    throw new AppError(400, "No active subscription found to cancel");
+  }
+
+  try {
+    const subscription = await stripe.subscriptions.cancel(user.subscriptionId);
+    
+    // Update local status immediately (webhook will confirm later)
+    user.subscriptionStatus = subscription.status;
+    await user.save();
+
+    return subscription;
+  } catch (error: any) {
+    console.error("Error canceling subscription:", error);
+    throw new AppError(500, error.message || "Failed to cancel subscription");
   }
 };
 
@@ -69,4 +91,5 @@ export const plan_service = {
   get_all_plan_from_db,
   create_plan_into_db,
   create_checkout_session,
+  cancel_subscription,
 };
