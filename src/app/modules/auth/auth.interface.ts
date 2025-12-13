@@ -29,6 +29,7 @@ export type TUser = {
   loggedInDevices?: TLoggedInDevice[];
   isVerified?: boolean;
   lastOTP?: string;
+  otpExpiresAt?: Date;
   isActive?: TAccountStatus;
   isDeleted?: boolean;
 

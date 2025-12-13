@@ -8,7 +8,12 @@
     "lint:fix": "eslint src --ext .ts --fix",
     "format": "prettier --write .",
     "build": "tsc",
-    "dev": "ts-node-dev --respawn --transpile-only src/server.ts"
+    "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
+    "start": "node dist/server.js",
+    "docker:build": "docker build -t robiul93093/sarbeswardas-backend:latest .",
+    "docker:run": "docker run --env-file .env -p 5000:5000 robiul93093/sarbeswardas-backend:latest",
+    "docker:up": "docker-compose up --build -d",
+    "docker:down": "docker-compose down"
   },
   "keywords": [],
   "author": "",
@@ -25,6 +30,7 @@
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.18.2",
     "multer": "^2.0.2",
+    "node-cron": "^4.2.1",
     "nodemailer": "^7.0.9",
     "resend": "^6.1.2",
     "streamifier": "^0.1.1",
@@ -32,6 +38,7 @@
     "ts-node-dev": "^2.0.0",
     "ua-parser-js": "^2.0.6",
     "uuid": "^13.0.0",
+    "uuidv4": "^6.2.13",
     "zod": "^4.1.12"
   },
   "devDependencies": {
@@ -44,6 +51,7 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/multer": "^2.0.0",
     "@types/node": "^24.6.2",
+    "@types/node-cron": "^3.0.11",
     "@types/nodemailer": "^7.0.2",
     "@types/streamifier": "^0.1.2",
     "@typescript-eslint/eslint-plugin": "^8.45.0",

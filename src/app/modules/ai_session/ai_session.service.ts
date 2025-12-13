@@ -24,6 +24,15 @@ const send_prompt_to_ai = async (
   prompt: string,
   contentType: "text" | "image"
 ): Promise<TSendPromptResult> => {
+  // 1. Call AI service first (before DB transaction)
+  let aiResponse: TAIServiceResponse;
+  try {
+    aiResponse = await call_ai_service(sessionId, prompt);
+  } catch (err) {
+    throw new AppError(502, "AI service unavailable");
+  }
+
+  // 2. Start Transaction to save both prompt and response
   const session = await mongoose.startSession();
   session.startTransaction();
 
@@ -45,35 +54,17 @@ const send_prompt_to_ai = async (
       { session }
     );
 
-    await session.commitTransaction();
-
-    // Call AI service
-    let aiResponse: TAIServiceResponse;
-    try {
-      aiResponse = await call_ai_service(sessionId, prompt);
-    } catch (err) {
-      throw new AppError(502, "AI service unavailable");
-    }
-
     // Store AI response
-    const responseSession = await mongoose.startSession();
-    responseSession.startTransaction();
-    try {
-      await store_ai_response(
-        sessionId,
-        userId,
-        sequenceNumber,
-        aiResponse,
-        responseSession,
-        contentType
-      );
-      await responseSession.commitTransaction();
-    } catch (err) {
-      await responseSession.abortTransaction();
-      throw err;
-    } finally {
-      responseSession.endSession();
-    }
+    await store_ai_response(
+      sessionId,
+      userId,
+      sequenceNumber,
+      aiResponse,
+      session,
+      contentType
+    );
+
+    await session.commitTransaction();
 
     // Return type-safe result
     if (contentType === "image") {
@@ -103,7 +94,7 @@ const send_prompt_to_ai = async (
       },
     } as TSendPromptResult;
   } catch (error) {
-    if (session.inTransaction()) await session.abortTransaction();
+    await session.abortTransaction();
     throw error;
   } finally {
     session.endSession();
@@ -244,11 +235,20 @@ const update_prompt_in_db = async (
   sequenceNumber: number,
   newPrompt: string
 ): Promise<TSendPromptResult> => {
+  // 1. Call AI service first with new prompt
+  let aiResponse: TAIServiceResponse;
+  try {
+    aiResponse = await call_ai_service(sessionId, newPrompt);
+  } catch (error) {
+    throw new AppError(502, "AI service is unavailable. Please try again later.");
+  }
+
+  // 2. Start Transaction for all DB operations
   const session = await mongoose.startSession();
   session.startTransaction();
 
   try {
-    // 1. Verify session ownership
+    // Verify session ownership
     const chatSession = await ChatSession_Model.findOne({
       sessionId,
       userId,
@@ -259,7 +259,7 @@ const update_prompt_in_db = async (
       throw new AppError(404, "Session not found or access denied");
     }
 
-    // 2. Find and update prompt
+    // Find and update prompt
     const promptMessage = await ChatMessage_Model.findOne({
       sessionId,
       sequenceNumber,
@@ -274,7 +274,7 @@ const update_prompt_in_db = async (
     promptMessage.content = newPrompt;
     await promptMessage.save({ session });
 
-    // 3. Delete old response
+    // Delete old response
     const responseMessage = await ChatMessage_Model.findOne({
       sessionId,
       sequenceNumber,
@@ -287,29 +287,10 @@ const update_prompt_in_db = async (
       await ChatMessage_Model.deleteOne({ _id: responseMessage._id }, { session });
     }
 
+    // Store new response
+    await store_ai_response(sessionId, userId, sequenceNumber, aiResponse, session);
+
     await session.commitTransaction();
-
-    // 4. Call AI with new prompt
-    let aiResponse: TAIServiceResponse;
-    try {
-      aiResponse = await call_ai_service(sessionId, newPrompt);
-    } catch (error) {
-      throw new AppError(502, "AI service is unavailable. Please try again later.");
-    }
-
-    // 5. Store new response
-    const newSession = await mongoose.startSession();
-    newSession.startTransaction();
-
-    try {
-      await store_ai_response(sessionId, userId, sequenceNumber, aiResponse, newSession);
-      await newSession.commitTransaction();
-    } catch (error) {
-      await newSession.abortTransaction();
-      throw error;
-    } finally {
-      newSession.endSession();
-    }
 
     return {
       sessionId,
