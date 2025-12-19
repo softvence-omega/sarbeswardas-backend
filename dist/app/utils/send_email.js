@@ -39,7 +39,7 @@ const sendEmail = (to, subject, html) => __awaiter(void 0, void 0, void 0, funct
             html,
             // replyTo: process.env.SMTP_USER
         });
-        console.log("📧 Email sent: %s", info.messageId);
+        // console.log("📧 Email sent: %s", info.messageId);
         return info;
     }
     catch (error) {

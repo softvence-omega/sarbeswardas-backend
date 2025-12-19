@@ -18,8 +18,8 @@ interface GooglePayload {
 }
 
 // Helper to generate UUID dynamically (ESM-safe)
-const generateUUID = async () => {
-  const { v4: uuidv4 } = await import("uuid");
+export const generateUUID = async (): Promise<string> => {
+  const { v4: uuidv4 } = await import("uuid"); // ✅ dynamic import for ESM
   return uuidv4();
 };
 
@@ -44,10 +44,7 @@ const sign_up_user_into_db = async (payload: TUser) => {
 
   const otp = OTPMaker();
   const otpExpiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes expiration
-  await User_Model.findOneAndUpdate(
-    { email },
-    { lastOTP: otp, otpExpiresAt }
-  );
+  await User_Model.findOneAndUpdate({ email }, { lastOTP: otp, otpExpiresAt });
 
   const otpDigits = otp.split("");
 
@@ -198,10 +195,7 @@ const forgot_password = async (emailInput: string | { email: string }) => {
 
   const otp = OTPMaker();
   const otpExpiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes expiration
-  await User_Model.findOneAndUpdate(
-    { email },
-    { lastOTP: otp, otpExpiresAt }
-  );
+  await User_Model.findOneAndUpdate({ email }, { lastOTP: otp, otpExpiresAt });
 
   const otpDigits = otp.split("");
   const emailTemp = `

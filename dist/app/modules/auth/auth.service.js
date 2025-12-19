@@ -76,7 +76,8 @@ const sign_up_user_into_db = (payload) => __awaiter(void 0, void 0, void 0, func
         throw new app_error_1.AppError(403, "Failed to create user");
     }
     const otp = (0, otp_maker_1.OTPMaker)();
-    yield auth_schema_1.User_Model.findOneAndUpdate({ email }, { lastOTP: otp });
+    const otpExpiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes expiration
+    yield auth_schema_1.User_Model.findOneAndUpdate({ email }, { lastOTP: otp, otpExpiresAt });
     const otpDigits = otp.split("");
     const emailTemp = `
     <table ...>
@@ -97,7 +98,7 @@ const sign_up_user_into_db = (payload) => __awaiter(void 0, void 0, void 0, func
       ...
     </table>
   `;
-    // await sendEmail(email, "Your OTP", emailTemp);
+    yield (0, send_email_1.sendEmail)(email, "Your OTP", emailTemp);
     return "User register successfully";
 });
 const verify_email_into_db = (payload) => __awaiter(void 0, void 0, void 0, function* () {
@@ -108,6 +109,9 @@ const verify_email_into_db = (payload) => __awaiter(void 0, void 0, void 0, func
     }
     if (user.lastOTP !== otp) {
         throw new app_error_1.AppError(403, "Wrong OTP");
+    }
+    if (user.otpExpiresAt && new Date() > user.otpExpiresAt) {
+        throw new app_error_1.AppError(403, "OTP expired. Please request a new one.");
     }
     const result = yield auth_schema_1.User_Model.findOneAndUpdate({ email }, { isVerified: true }, { new: true });
     if (!result) {
@@ -183,7 +187,8 @@ const forgot_password = (emailInput) => __awaiter(void 0, void 0, void 0, functi
     if (!user)
         throw new app_error_1.AppError(404, "User not found");
     const otp = (0, otp_maker_1.OTPMaker)();
-    yield auth_schema_1.User_Model.findOneAndUpdate({ email }, { lastOTP: otp });
+    const otpExpiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes expiration
+    yield auth_schema_1.User_Model.findOneAndUpdate({ email }, { lastOTP: otp, otpExpiresAt });
     const otpDigits = otp.split("");
     const emailTemp = `
     <table ...>
@@ -204,7 +209,8 @@ const forgot_password = (emailInput) => __awaiter(void 0, void 0, void 0, functi
       ...
     </table>
   `;
-    yield (0, send_email_1.sendEmail)(email, "Your OTP", emailTemp);
+    const res = yield (0, send_email_1.sendEmail)(email, "Your OTP", emailTemp);
+    console.log("res :", res);
     return "Check your email for OTP";
 });
 const reset_password_into_db = (email, otp, newPassword) => __awaiter(void 0, void 0, void 0, function* () {
@@ -213,6 +219,9 @@ const reset_password_into_db = (email, otp, newPassword) => __awaiter(void 0, vo
         throw new app_error_1.AppError(404, "User not found");
     if (user.lastOTP !== otp) {
         throw new app_error_1.AppError(409, "Invalid OTP");
+    }
+    if (user.otpExpiresAt && new Date() > user.otpExpiresAt) {
+        throw new app_error_1.AppError(403, "OTP expired. Please request a new one.");
     }
     const newHashedPassword = yield bcrypt_1.default.hash(newPassword, 10);
     user.password = newHashedPassword;
