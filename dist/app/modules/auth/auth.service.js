@@ -1,37 +1,4 @@
 "use strict";
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || (function () {
-    var ownKeys = function(o) {
-        ownKeys = Object.getOwnPropertyNames || function (o) {
-            var ar = [];
-            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
-            return ar;
-        };
-        return ownKeys(o);
-    };
-    return function (mod) {
-        if (mod && mod.__esModule) return mod;
-        var result = {};
-        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
-        __setModuleDefault(result, mod);
-        return result;
-    };
-})();
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -45,7 +12,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.auth_service = void 0;
+exports.auth_service = exports.generateUUID = void 0;
 const config_1 = __importDefault(require("../../config"));
 const app_error_1 = require("../../utils/app_error");
 const JWT_1 = require("../../utils/JWT");
@@ -55,11 +22,12 @@ const otp_maker_1 = require("../../utils/otp_maker");
 const ua_parser_js_1 = require("ua-parser-js");
 const mongoose_1 = __importDefault(require("mongoose"));
 const send_email_1 = require("../../utils/send_email");
-// Helper to generate UUID dynamically (ESM-safe)
-const generateUUID = () => __awaiter(void 0, void 0, void 0, function* () {
-    const { v4: uuidv4 } = yield Promise.resolve().then(() => __importStar(require("uuid")));
-    return uuidv4();
-});
+const uuid_1 = require("uuid");
+// Helper to generate UUID
+const generateUUID = () => {
+    return (0, uuid_1.v4)();
+};
+exports.generateUUID = generateUUID;
 const sign_up_user_into_db = (payload) => __awaiter(void 0, void 0, void 0, function* () {
     const { email, password } = payload;
     if (!email || !password) {
@@ -135,7 +103,7 @@ const login_user_into_db = (req, payload) => __awaiter(void 0, void 0, void 0, f
     if (!isPasswordMatch) {
         throw new app_error_1.AppError(403, "Wrong password!!");
     }
-    const deviceId = yield generateUUID();
+    const deviceId = (0, exports.generateUUID)();
     const userAgent = req.headers["user-agent"] || "Unknown";
     let ip = req.ip || req.headers["x-forwarded-for"] || req.socket.remoteAddress;
     if (Array.isArray(ip))
@@ -217,6 +185,10 @@ const reset_password_into_db = (email, otp, newPassword) => __awaiter(void 0, vo
     const user = yield auth_schema_1.User_Model.findOne({ email });
     if (!user)
         throw new app_error_1.AppError(404, "User not found");
+    console.log("User :", user);
+    console.log(email, otp, newPassword, user.lastOTP, user.otpExpiresAt);
+    console.log("check opt time :", user.otpExpiresAt && new Date() > user.otpExpiresAt);
+    console.log("check opt matched :", user.lastOTP === otp, user.lastOTP, otp);
     if (user.lastOTP !== otp) {
         throw new app_error_1.AppError(409, "Invalid OTP");
     }
@@ -271,7 +243,7 @@ const login_user_with_google_from_db = (req, payload) => __awaiter(void 0, void 
             throw new app_error_1.AppError(403, "This account has been deleted");
         if (user.isActive === "INACTIVE")
             throw new app_error_1.AppError(403, "This account is blocked");
-        const deviceId = yield generateUUID();
+        const deviceId = (0, exports.generateUUID)();
         const userAgent = req.headers["user-agent"] || "Unknown";
         let ip = req.ip || req.headers["x-forwarded-for"] || req.socket.remoteAddress;
         if (Array.isArray(ip))
