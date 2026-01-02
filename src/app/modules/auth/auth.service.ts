@@ -9,6 +9,7 @@ import { Request } from "express";
 import { UAParser } from "ua-parser-js";
 import mongoose from "mongoose";
 import { sendEmail } from "../../utils/send_email";
+import { v4 as uuidv4 } from "uuid";
 
 interface GooglePayload {
   email: string;
@@ -17,9 +18,8 @@ interface GooglePayload {
   photoUrl?: string;
 }
 
-// Helper to generate UUID dynamically (ESM-safe)
-const generateUUID = async () => {
-  const { v4: uuidv4 } = await import("uuid");
+// Helper to generate UUID
+export const generateUUID = (): string => {
   return uuidv4();
 };
 
@@ -44,10 +44,7 @@ const sign_up_user_into_db = async (payload: TUser) => {
 
   const otp = OTPMaker();
   const otpExpiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes expiration
-  await User_Model.findOneAndUpdate(
-    { email },
-    { lastOTP: otp, otpExpiresAt }
-  );
+  await User_Model.findOneAndUpdate({ email }, { lastOTP: otp, otpExpiresAt });
 
   const otpDigits = otp.split("");
 
@@ -124,7 +121,7 @@ const login_user_into_db = async (req: Request, payload: { email: string; passwo
     throw new AppError(403, "Wrong password!!");
   }
 
-  const deviceId = await generateUUID();
+  const deviceId = generateUUID();
 
   const userAgent = req.headers["user-agent"] || "Unknown";
   let ip = req.ip || req.headers["x-forwarded-for"] || req.socket.remoteAddress;
@@ -198,10 +195,7 @@ const forgot_password = async (emailInput: string | { email: string }) => {
 
   const otp = OTPMaker();
   const otpExpiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes expiration
-  await User_Model.findOneAndUpdate(
-    { email },
-    { lastOTP: otp, otpExpiresAt }
-  );
+  await User_Model.findOneAndUpdate({ email }, { lastOTP: otp, otpExpiresAt });
 
   const otpDigits = otp.split("");
   const emailTemp = `
@@ -226,14 +220,17 @@ const forgot_password = async (emailInput: string | { email: string }) => {
     </table>
   `;
   const res = await sendEmail(email, "Your OTP", emailTemp);
-  console.log("res :", res);
+  // console.log("res :", res);
   return "Check your email for OTP";
 };
 
 const reset_password_into_db = async (email: string, otp: string, newPassword: string) => {
   const user = await User_Model.findOne({ email });
   if (!user) throw new AppError(404, "User not found");
-
+  // console.log("User :", user);
+  // console.log(email, otp, newPassword, user.lastOTP, user.otpExpiresAt);
+  // console.log("check opt time :", user.otpExpiresAt && new Date() > user.otpExpiresAt);
+  // console.log("check opt matched :", user.lastOTP === otp, user.lastOTP, otp);
   if (user.lastOTP !== otp) {
     throw new AppError(409, "Invalid OTP");
   }
@@ -301,7 +298,7 @@ const login_user_with_google_from_db = async (req: Request, payload: GooglePaylo
     if (user.isDeleted) throw new AppError(403, "This account has been deleted");
     if (user.isActive === "INACTIVE") throw new AppError(403, "This account is blocked");
 
-    const deviceId = await generateUUID();
+    const deviceId = generateUUID();
     const userAgent = req.headers["user-agent"] || "Unknown";
     let ip = req.ip || req.headers["x-forwarded-for"] || req.socket.remoteAddress;
     if (Array.isArray(ip)) ip = ip[0];

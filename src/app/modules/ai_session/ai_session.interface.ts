@@ -18,7 +18,8 @@ export type TAIServiceRequest = {
 
 export type TAIServiceResponse = {
   session_id: string;
-  selected: TAdapterResponse;
+  summary: string;
+  selected?: TAdapterResponse;
   responses: TAdapterResponse[];
 };
 
@@ -51,6 +52,7 @@ export type TChatMessage = {
   content: string;
   contentType: TContentType;
   selectedAdapter?: TAdapterType;
+  summary?: string;
   userId: ObjectId;
   isDeleted?: boolean;
   createdAt?: Date;
@@ -74,6 +76,7 @@ export type TSendPromptResult = {
   sessionId: string;
   sequenceNumber: number;
   prompt: string;
+  summary: string;
   response: {
     selected: TAdapterResponse;
     allResponses: TAdapterResponse[];
@@ -83,6 +86,7 @@ export type TSendPromptResult = {
 export type TConversationMessage = {
   sequenceNumber: number;
   prompt: string;
+  summary?: string;
   response: {
     selected: TAdapterResponse;
     allResponses: TAdapterResponse[];
