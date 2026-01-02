@@ -28,8 +28,10 @@ const send_prompt_to_ai = async (
   let aiResponse: TAIServiceResponse;
   try {
     aiResponse = await call_ai_service(sessionId, prompt);
-  } catch (err) {
-    throw new AppError(502, "AI service unavailable");
+  } catch (err: any) {
+    // console.log(err);
+    throw new AppError(502, err);
+    // throw new AppError(502, "AI service unavailable");
   }
 
   // 2. Start Transaction to save both prompt and response
@@ -61,19 +63,20 @@ const send_prompt_to_ai = async (
       sequenceNumber,
       aiResponse,
       session,
-      contentType
+      contentType,
+      aiResponse.summary
     );
 
     await session.commitTransaction();
 
     // Return type-safe result
     if (contentType === "image") {
-      // For image responses, adapt to TSendPromptResult shape by placing image info into the response.selected fields.
       const anyResp = aiResponse as any;
       return {
         sessionId,
         sequenceNumber,
         prompt,
+        summary: aiResponse.summary,
         response: {
           selected: {
             adapter: anyResp.adapter ?? "",
@@ -88,8 +91,9 @@ const send_prompt_to_ai = async (
       sessionId,
       sequenceNumber,
       prompt,
+      summary: aiResponse.summary,
       response: {
-        selected: aiResponse.selected,
+        selected: aiResponse.selected!,
         allResponses: aiResponse.responses,
       },
     } as TSendPromptResult;
@@ -137,9 +141,7 @@ export const get_session_history_from_db = async (
   }
 
   // 3️⃣ Collect all response message IDs
-  const responseMessageIds = messages
-    .filter((m) => m.messageType === "response")
-    .map((m) => m._id);
+  const responseMessageIds = messages.filter((m) => m.messageType === "response").map((m) => m._id);
 
   const adapterResponses = await AdapterResponse_Model.find({
     messageId: { $in: responseMessageIds },
@@ -186,6 +188,7 @@ export const get_session_history_from_db = async (
         sequenceNumber,
         contentType: "text",
         prompt: promptMsg?.content || "",
+        summary: responseMsg.summary || "",
         response: {
           selected: selectedAdapter
             ? {
@@ -226,8 +229,6 @@ export const get_session_history_from_db = async (
   };
 };
 
-
-
 //Update prompt and regenerate response
 const update_prompt_in_db = async (
   userId: string,
@@ -239,6 +240,9 @@ const update_prompt_in_db = async (
   let aiResponse: TAIServiceResponse;
   try {
     aiResponse = await call_ai_service(sessionId, newPrompt);
+    if (!aiResponse.selected) {
+      aiResponse.selected = aiResponse.responses[0];
+    }
   } catch (error) {
     throw new AppError(502, "AI service is unavailable. Please try again later.");
   }
@@ -288,7 +292,15 @@ const update_prompt_in_db = async (
     }
 
     // Store new response
-    await store_ai_response(sessionId, userId, sequenceNumber, aiResponse, session);
+    await store_ai_response(
+      sessionId,
+      userId,
+      sequenceNumber,
+      aiResponse,
+      session,
+      "text",
+      aiResponse.summary
+    );
 
     await session.commitTransaction();
 
@@ -296,8 +308,9 @@ const update_prompt_in_db = async (
       sessionId,
       sequenceNumber,
       prompt: newPrompt,
+      summary: aiResponse.summary,
       response: {
-        selected: aiResponse.selected,
+        selected: aiResponse.selected!,
         allResponses: aiResponse.responses,
       },
     };
@@ -516,7 +529,7 @@ const handle_ai_image = async (userId: string, sessionId: string, prompt: string
     const cloudinaryResult = await uploadToCloudinary(filePath);
 
     // 🔍 Debug: Check cloudinary result
-    console.log("📸 Cloudinary Result:", JSON.stringify(cloudinaryResult, null, 2));
+    // console.log("📸 Cloudinary Result:", JSON.stringify(cloudinaryResult, null, 2));
 
     // 4️⃣ Save main ChatMessage
     const [message] = await ChatMessage_Model.create(
@@ -533,7 +546,7 @@ const handle_ai_image = async (userId: string, sessionId: string, prompt: string
       ],
       { session }
     );
-    console.log("💬 Message Created:", message);
+    // console.log("💬 Message Created:", message);
 
     // 5️⃣ Prepare adapter response data (matching schema field names)
     const adapterResponseData = {
@@ -550,23 +563,16 @@ const handle_ai_image = async (userId: string, sessionId: string, prompt: string
     };
 
     // 🔍 Debug: Check data before saving
-    console.log("📦 Adapter Response Data:", JSON.stringify(adapterResponseData, null, 2));
+    // console.log("📦 Adapter Response Data:", JSON.stringify(adapterResponseData, null, 2));
 
     // Save AdapterResponse
-    const [createdAdapter] = await AdapterResponse_Model.create(
-      [adapterResponseData],
-      { session }
-    );
+    const [createdAdapter] = await AdapterResponse_Model.create([adapterResponseData], { session });
 
     // 🔍 Debug: Check saved document
-    console.log("✅ Adapter Response Created:", JSON.stringify(createdAdapter.toObject(), null, 2));
+    // console.log("✅ Adapter Response Created:", JSON.stringify(createdAdapter.toObject(), null, 2));
 
     // 6️⃣ Update session timestamp
-    await ChatSession_Model.findOneAndUpdate(
-      { sessionId },
-      { updatedAt: new Date() },
-      { session }
-    );
+    await ChatSession_Model.findOneAndUpdate({ sessionId }, { updatedAt: new Date() }, { session });
 
     await session.commitTransaction();
     session.endSession();
@@ -597,10 +603,11 @@ const handle_ai_image = async (userId: string, sessionId: string, prompt: string
 // ============= Helper Functions =============
 
 const call_ai_service = async (sessionId: string, prompt: string): Promise<TAIServiceResponse> => {
-  const aiServiceUrl = process.env.AI_SERVICE_URL || "http://localhost:5000/api/ai/chat";
-  const timeout = parseInt(process.env.AI_SERVICE_TIMEOUT || "30000", 10);
+  const aiServiceUrl = process.env.AI_SERVICE_URL as string; //|| "http://localhost:5000/api/ai/chat";
+  const timeout = parseInt(process.env.AI_SERVICE_TIMEOUT || "120000", 10);
 
   try {
+    // console.log(`📡 Connecting to AI service at: ${aiServiceUrl}`);
     const response = await axios.post<TAIServiceResponse>(
       aiServiceUrl,
       {
@@ -615,8 +622,15 @@ const call_ai_service = async (sessionId: string, prompt: string): Promise<TAISe
       }
     );
 
-    if (!response.data.selected || !response.data.responses) {
-      throw new AppError(502, "Invalid AI service response format");
+    // console.log("📥 AI service response data:", JSON.stringify(response.data, null, 2));
+
+    if (!response.data.responses || response.data.responses.length === 0) {
+      throw new AppError(502, "Invalid AI service response: No responses found");
+    }
+
+    // Backend Shim: pick first response if 'selected' is missing
+    if (!response.data.selected) {
+      response.data.selected = response.data.responses[0];
     }
 
     return response.data;
@@ -627,10 +641,14 @@ const call_ai_service = async (sessionId: string, prompt: string): Promise<TAISe
         throw new AppError(504, "AI service request timeout");
       }
       if (axiosError.response) {
-        throw new AppError(502, `AI service error: ${axiosError.response.status}`);
+        throw new AppError(
+          502,
+          `AI service error: ${axiosError.response.status} - ${JSON.stringify(axiosError.response.data)}`
+        );
       }
+      throw new AppError(502, `Failed to connect to AI service: ${axiosError.message}`);
     }
-    throw new AppError(502, "Failed to connect to AI service");
+    throw new AppError(502, `Failed to connect to AI service: ${(error as Error).message || "Unknown error"}`);
   }
 };
 
@@ -640,7 +658,8 @@ const store_ai_response = async (
   sequenceNumber: number,
   aiResponse: TAIServiceResponse,
   session: ClientSession,
-  contentType: "text" | "image" = "text"
+  contentType: "text" | "image" = "text",
+  summary?: string
 ): Promise<void> => {
   let responseMessage: TChatMessage & { _id: mongoose.Types.ObjectId };
 
@@ -655,6 +674,7 @@ const store_ai_response = async (
           selectedAdapter: (aiResponse as any).adapter,
           userId,
           contentType: "image",
+          summary,
         },
       ],
       { session }
@@ -666,10 +686,11 @@ const store_ai_response = async (
           sessionId,
           messageType: "response",
           sequenceNumber,
-          content: aiResponse.selected.text,
-          selectedAdapter: aiResponse.selected.adapter,
+          content: aiResponse.selected!.text,
+          selectedAdapter: aiResponse.selected!.adapter,
           userId,
           contentType: "text",
+          summary,
         },
       ],
       { session }
@@ -679,7 +700,7 @@ const store_ai_response = async (
       messageId: responseMessage._id,
       adapter: resp.adapter,
       text: resp.text,
-      isSelected: resp.adapter === aiResponse.selected.adapter,
+      isSelected: resp.adapter === aiResponse.selected!.adapter,
     }));
 
     await AdapterResponse_Model.insertMany(adapterResponses, { session });
