@@ -24,13 +24,13 @@ const create_checkout_session = async (userId: string, planId: string) => {
 
     const plan = await Plan_Model.findById(planId);
     if (!plan) throw new AppError(404, "Plan not found");
-    console.log("user: ", user);
+    // console.log("user: ", user);
     if (!user.stripeCustomerId) {
       const customer = await stripe.customers.create({
         email: user.email,
         name: user.fullName,
       });
-      console.log("stripe customer: ", customer);
+      // console.log("stripe customer: ", customer);
       user.stripeCustomerId = customer.id;
       await user.save();
     }

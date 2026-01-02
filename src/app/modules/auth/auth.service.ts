@@ -220,17 +220,17 @@ const forgot_password = async (emailInput: string | { email: string }) => {
     </table>
   `;
   const res = await sendEmail(email, "Your OTP", emailTemp);
-  console.log("res :", res);
+  // console.log("res :", res);
   return "Check your email for OTP";
 };
 
 const reset_password_into_db = async (email: string, otp: string, newPassword: string) => {
   const user = await User_Model.findOne({ email });
   if (!user) throw new AppError(404, "User not found");
-  console.log("User :", user);
-  console.log(email, otp, newPassword, user.lastOTP, user.otpExpiresAt);
-  console.log("check opt time :", user.otpExpiresAt && new Date() > user.otpExpiresAt);
-  console.log("check opt matched :", user.lastOTP === otp, user.lastOTP, otp);
+  // console.log("User :", user);
+  // console.log(email, otp, newPassword, user.lastOTP, user.otpExpiresAt);
+  // console.log("check opt time :", user.otpExpiresAt && new Date() > user.otpExpiresAt);
+  // console.log("check opt matched :", user.lastOTP === otp, user.lastOTP, otp);
   if (user.lastOTP !== otp) {
     throw new AppError(409, "Invalid OTP");
   }

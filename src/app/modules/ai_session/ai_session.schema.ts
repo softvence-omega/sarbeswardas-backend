@@ -75,6 +75,9 @@ const chatMessageSchema = new Schema<TChatMessage>(
       enum: ["text", "image"], // NEW FIELD
       default: "text",
     },
+    summary: {
+      type: String,
+    },
     selectedAdapter: {
       type: String,
       enum: ["openai", "gemini", "claude", "perplexity"],
