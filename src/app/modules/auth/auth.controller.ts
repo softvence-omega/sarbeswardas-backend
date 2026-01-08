@@ -9,7 +9,8 @@ const sign_up_user = catchAsync(async (req, res) => {
   sendResponse(res, {
     success: true,
     statusCode: 200,
-    message: "Check your email for OTP",
+    message: "User register successfully",
+    // message: "Check your email for OTP",
     data: result,
   });
 });
