@@ -12,7 +12,7 @@ router.post("/send", auth(), verifySubscription(), chat_controller.send_prompt);
 router.get("/session/:sessionId", auth(), chat_controller.get_session_history);
 
 /***/
-router.put("/prompt", auth(), chat_controller.update_prompt);
+router.put("/prompt", auth(), verifySubscription(), chat_controller.update_prompt);
 
 /***/
 router.patch("/selection", auth(), chat_controller.update_selection);
