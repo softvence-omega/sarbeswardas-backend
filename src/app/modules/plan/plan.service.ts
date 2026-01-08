@@ -75,7 +75,7 @@ const cancel_subscription = async (userId: string) => {
 
   try {
     const subscription = await stripe.subscriptions.cancel(user.subscriptionId);
-    
+console.log(subscription)
     // Update local status immediately (webhook will confirm later)
     user.subscriptionStatus = subscription.status;
     await user.save();

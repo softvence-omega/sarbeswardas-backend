@@ -194,7 +194,7 @@ const cancel_subscription = catchAsync(async (req, res) => {
     success: true,
     statusCode: 200,
     message: "Subscription canceled successfully",
-    data: result,
+    // data: result,
   });
 });
 

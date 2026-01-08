@@ -12,10 +12,18 @@ export const verifySubscription = () => {
       const isTrial = user.trialEndsAt && user.trialEndsAt > new Date();
       const isActive = ["active", "trialing"].includes(user.subscriptionStatus);
 
-      if (isTrial || isActive) {
+      // --- Option 1: Standard logic (Trial continues even if canceled) ---
+      // if (isTrial || isActive) {
+      //   return next();
+      // }
+
+      // --- Option 2: Immediate stop logic (Blocks if canceled, even in trial) ---
+      
+      const isCanceled = user.subscriptionStatus === "canceled";
+      if (!isCanceled && (isTrial || isActive)) {
         return next();
       }
-
+      
       return res.status(403).json({
         message: "Subscription required. Please upgrade your plan.",
       });
