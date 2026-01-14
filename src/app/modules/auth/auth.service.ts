@@ -35,7 +35,18 @@ const sign_up_user_into_db = async (payload: TUser) => {
   }
 
   const hashedPassword = await bcrypt.hash(password, 10);
-  const modifiedData = { ...payload, password: hashedPassword };
+  
+  // Set 7-day trial period on registration
+  const trialEndsAt = new Date();
+  trialEndsAt.setDate(trialEndsAt.getDate() + 7);
+  
+  const modifiedData = { 
+    ...payload, 
+    password: hashedPassword,
+    subscriptionStatus: "trialing",
+    trialEndsAt,
+    hasUsedTrial: true
+  };
 
   const updatedUser = await User_Model.create(modifiedData);
   if (!updatedUser) {
@@ -276,6 +287,10 @@ const login_user_with_google_from_db = async (req: Request, payload: GooglePaylo
     let user = await User_Model.findOne({ email: payload.email }).session(session);
 
     if (!user) {
+      // Set 7-day trial period on registration
+      const trialEndsAt = new Date();
+      trialEndsAt.setDate(trialEndsAt.getDate() + 7);
+      
       const newUsers = await User_Model.create(
         [
           {
@@ -284,6 +299,9 @@ const login_user_with_google_from_db = async (req: Request, payload: GooglePaylo
             fullName: payload.fullName,
             isVerified: true,
             profileImage: payload.photoUrl || "",
+            subscriptionStatus: "trialing",
+            trialEndsAt,
+            hasUsedTrial: true
           },
         ],
         { session }

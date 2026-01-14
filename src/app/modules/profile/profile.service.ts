@@ -3,7 +3,7 @@ import { User_Model } from "../auth/auth.schema";
 
 const get_profile_info_from_db = async (email: string) => {
   const user = await User_Model.findOne({ email, isDeleted: false }).select(
-    "_id fullName email profileImage isVerified createdAt updatedAt"
+    "_id fullName email profileImage isVerified subscriptionStatus trialEndsAt hasUsedTrial createdAt updatedAt"
   );
   if (!user) {
     throw new AppError(404, "User not found");

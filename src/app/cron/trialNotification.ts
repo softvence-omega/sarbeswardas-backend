@@ -34,7 +34,7 @@ export const startTrialNotifications = () => {
             <p>Hi ${user.fullName || "there"},</p>
             <p>We hope you're enjoying your premium features.</p>
             <p>This is a reminder that your free trial will end in <strong>2 days</strong>.</p>
-            <p>After the trial ends, you will be automatically charged for the subscription plan you selected. If you wish to cancel, please do so before your trial expires to avoid any charges.</p>
+            <p>After the trial ends, your access to AI features will be limited. If you wish to continue using these features, please subscribe to one of our premium plans.</p>
             <br/> 
             <p>Thank you,</p>
             <p>The Team</p>

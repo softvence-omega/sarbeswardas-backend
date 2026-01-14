@@ -9,18 +9,11 @@ export const verifySubscription = () => {
         return res.status(404).json({ message: "User not found" });
       }
 
-      const isTrial = user.trialEndsAt && user.trialEndsAt > new Date();
-      const isActive = ["active", "trialing"].includes(user.subscriptionStatus);
+      const isTrialEffective = user.subscriptionStatus === "trialing" && user.trialEndsAt && user.trialEndsAt > new Date();
+      const isSubscribed = user.subscriptionStatus === "active";
 
-      // --- Option 1: Standard logic (Trial continues even if canceled) ---
-      // if (isTrial || isActive) {
-      //   return next();
-      // }
-
-      // --- Option 2: Immediate stop logic (Blocks if canceled, even in trial) ---
-      
       const isCanceled = user.subscriptionStatus === "canceled";
-      if (!isCanceled && (isTrial || isActive)) {
+      if (!isCanceled && (isTrialEffective || isSubscribed)) {
         return next();
       }
       

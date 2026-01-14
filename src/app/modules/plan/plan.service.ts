@@ -50,14 +50,6 @@ const create_checkout_session = async (userId: string, planId: string) => {
       cancel_url: `${process.env.CLIENT_URL}/payment/cancel`,
     };
 
-    //  Give trial only if user hasn’t used it before
-    //  Give trial only if user hasn’t used it before
-    if (!user.hasUsedTrial) {
-      sessionConfig.subscription_data = {
-        trial_period_days: 7,
-      };
-    }
-
     const session = await stripe.checkout.sessions.create(sessionConfig);
     return { url: session.url };
   } catch (error) {
