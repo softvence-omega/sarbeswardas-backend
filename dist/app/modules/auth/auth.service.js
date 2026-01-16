@@ -38,7 +38,10 @@ const sign_up_user_into_db = (payload) => __awaiter(void 0, void 0, void 0, func
         throw new app_error_1.AppError(409, "Account already exist! Try with new email.");
     }
     const hashedPassword = yield bcrypt_1.default.hash(password, 10);
-    const modifiedData = Object.assign(Object.assign({}, payload), { password: hashedPassword });
+    // Set 7-day trial period on registration
+    const trialEndsAt = new Date();
+    trialEndsAt.setDate(trialEndsAt.getDate() + 7);
+    const modifiedData = Object.assign(Object.assign({}, payload), { password: hashedPassword, subscriptionStatus: "trialing", trialEndsAt, hasUsedTrial: true });
     const updatedUser = yield auth_schema_1.User_Model.create(modifiedData);
     if (!updatedUser) {
         throw new app_error_1.AppError(403, "Failed to create user");
@@ -224,6 +227,9 @@ const login_user_with_google_from_db = (req, payload) => __awaiter(void 0, void 
     try {
         let user = yield auth_schema_1.User_Model.findOne({ email: payload.email }).session(session);
         if (!user) {
+            // Set 7-day trial period on registration
+            const trialEndsAt = new Date();
+            trialEndsAt.setDate(trialEndsAt.getDate() + 7);
             const newUsers = yield auth_schema_1.User_Model.create([
                 {
                     email: payload.email,
@@ -231,6 +237,9 @@ const login_user_with_google_from_db = (req, payload) => __awaiter(void 0, void 
                     fullName: payload.fullName,
                     isVerified: true,
                     profileImage: payload.photoUrl || "",
+                    subscriptionStatus: "trialing",
+                    trialEndsAt,
+                    hasUsedTrial: true
                 },
             ], { session });
             user = newUsers[0];

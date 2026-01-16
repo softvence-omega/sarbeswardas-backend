@@ -22,7 +22,8 @@ const sign_up_user = (0, catch_async_1.default)((req, res) => __awaiter(void 0, 
     (0, send_response_1.sendResponse)(res, {
         success: true,
         statusCode: 200,
-        message: "Check your email for OTP",
+        message: "User register successfully",
+        // message: "Check your email for OTP",
         data: result,
     });
 }));

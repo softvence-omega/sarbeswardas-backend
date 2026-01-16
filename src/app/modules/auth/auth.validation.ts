@@ -11,3 +11,7 @@ export const change_password_schema = z.object({
   oldPassword: z.string("oldPassword is required"),
   newPassword: z.string().min(6, "New password must be at least 6 characters"),
 });
+
+export const resend_otp_schema = z.object({
+  email: z.string().email("Invalid email address"),
+});

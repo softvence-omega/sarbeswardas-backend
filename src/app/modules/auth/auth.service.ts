@@ -83,7 +83,8 @@ const sign_up_user_into_db = async (payload: TUser) => {
 
   await sendEmail(email, "Your OTP", emailTemp);
 
-  return "User register successfully";
+  return null;
+  // return "User register successfully";
 };
 
 const verify_email_into_db = async (payload: { email: string; otp: string }) => {
@@ -367,6 +368,43 @@ const delete_account_from_db = async (userId: string) => {
   return updatedUser;
 };
 
+const resend_otp_into_db = async (email: string) => {
+  const user = await User_Model.findOne({ email });
+  if (!user) {
+    throw new AppError(404, "User not found");
+  }
+
+  const otp = OTPMaker();
+  const otpExpiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes expiration
+  await User_Model.findOneAndUpdate({ email }, { lastOTP: otp, otpExpiresAt });
+
+  const otpDigits = otp.split("");
+
+  const emailTemp = `
+    <table ...>
+      ...
+      <tr>
+        ${otpDigits
+          .map(
+            (digit) => `
+            <td align="center" valign="middle"
+              style="background:#f5f3ff; border-radius:12px; width:56px; height:56px;">
+              <div style="font-size:22px; line-height:56px; color:#111827; font-weight:700; text-align:center;">
+                ${digit}
+              </div>
+            </td>
+            <td style="width:12px;">&nbsp;</td>
+          `
+          )
+          .join("")}
+      </tr>
+      ...
+    </table>
+  `;
+
+  await sendEmail(email, "Your OTP", emailTemp);
+};
+
 export const auth_service = {
   sign_up_user_into_db,
   verify_email_into_db,
@@ -377,4 +415,5 @@ export const auth_service = {
   logged_out_all_device_from_db,
   login_user_with_google_from_db,
   delete_account_from_db,
+  resend_otp_into_db,
 };

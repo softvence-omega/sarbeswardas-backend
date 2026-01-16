@@ -9,8 +9,8 @@ const sign_up_user = catchAsync(async (req, res) => {
   sendResponse(res, {
     success: true,
     statusCode: 200,
-    message: "User register successfully",
-    // message: "Check your email for OTP",
+    // message: "User register successfully",
+    message: "Check your email for OTP",
     data: result,
   });
 });
@@ -135,6 +135,18 @@ const delete_account = catchAsync(async (req, res) => {
   });
 });
 
+const resend_otp = catchAsync(async (req, res) => {
+  const { email } = req.body;
+
+  await auth_service.resend_otp_into_db(email);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: 200,
+    message: "OTP sent successfully",
+  });
+});
+
 export const auth_controller = {
   sign_up_user,
   verify_email,
@@ -145,4 +157,5 @@ export const auth_controller = {
   logged_out_all_device,
   login_user_with_google,
   delete_account,
+  resend_otp,
 };

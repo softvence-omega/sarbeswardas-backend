@@ -13,7 +13,7 @@ exports.profile_service = void 0;
 const app_error_1 = require("../../utils/app_error");
 const auth_schema_1 = require("../auth/auth.schema");
 const get_profile_info_from_db = (email) => __awaiter(void 0, void 0, void 0, function* () {
-    const user = yield auth_schema_1.User_Model.findOne({ email, isDeleted: false }).select("_id fullName email profileImage isVerified createdAt updatedAt");
+    const user = yield auth_schema_1.User_Model.findOne({ email, isDeleted: false }).select("_id fullName email profileImage isVerified subscriptionStatus trialEndsAt hasUsedTrial createdAt updatedAt");
     if (!user) {
         throw new app_error_1.AppError(404, "User not found");
     }
