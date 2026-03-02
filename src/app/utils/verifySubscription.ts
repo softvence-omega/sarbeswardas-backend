@@ -13,7 +13,9 @@ export const verifySubscription = () => {
       const isSubscribed = user.subscriptionStatus === "active";
 
       const isCanceled = user.subscriptionStatus === "canceled";
-      if (!isCanceled && (isTrialEffective || isSubscribed)) {
+      const isExempt = user.isSubscriptionExempt === true;
+
+      if (!isCanceled && (isTrialEffective || isSubscribed || isExempt)) {
         return next();
       }
       

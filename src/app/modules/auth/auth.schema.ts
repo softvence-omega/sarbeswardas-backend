@@ -79,6 +79,10 @@ const userSchema = new Schema<TUser>(
       default: "none",
     },
     trialEndsAt: { type: Date },
+    isSubscriptionExempt: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: true,

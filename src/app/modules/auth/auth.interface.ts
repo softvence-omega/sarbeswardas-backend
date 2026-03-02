@@ -38,4 +38,5 @@ export type TUser = {
   subscriptionId: string;
   subscriptionStatus: TSubscriptionStatus;
   trialEndsAt: Date;
+  isSubscriptionExempt?: boolean;
 };
