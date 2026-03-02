@@ -31,7 +31,26 @@ const auth = () => {
         });
       }
 
-      const verifyUser = jwtHelpers.verifyToken(token, config.access_token_secret as string);
+      // const verifyUser = jwtHelpers.verifyToken(token, config.access_token_secret as string);
+
+      let verifyUser: JwtPayloadType;
+
+      try {
+        verifyUser = jwtHelpers.verifyToken(
+          token,
+          config.access_token_secret as string
+        );
+      } catch (err: any) {
+        if (err.name === "TokenExpiredError") {
+          throw new AppError(401, "Token expired. Please login again.");
+        }
+
+        if (err.name === "JsonWebTokenError") {
+          throw new AppError(401, "Invalid token.");
+        }
+
+        throw err;
+      }
 
       const isUserExist = await User_Model.findOne({ email: verifyUser.email });
       if (!isUserExist) {

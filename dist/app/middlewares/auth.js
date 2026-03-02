@@ -35,7 +35,20 @@ const auth = () => {
                     message: "Unauthorized: Token missing.",
                 });
             }
-            const verifyUser = JWT_1.jwtHelpers.verifyToken(token, config_1.default.access_token_secret);
+            // const verifyUser = jwtHelpers.verifyToken(token, config.access_token_secret as string);
+            let verifyUser;
+            try {
+                verifyUser = JWT_1.jwtHelpers.verifyToken(token, config_1.default.access_token_secret);
+            }
+            catch (err) {
+                if (err.name === "TokenExpiredError") {
+                    throw new app_error_1.AppError(401, "Token expired. Please login again.");
+                }
+                if (err.name === "JsonWebTokenError") {
+                    throw new app_error_1.AppError(401, "Invalid token.");
+                }
+                throw err;
+            }
             const isUserExist = yield auth_schema_1.User_Model.findOne({ email: verifyUser.email });
             if (!isUserExist) {
                 throw new app_error_1.AppError(404, "This user not exist!!");

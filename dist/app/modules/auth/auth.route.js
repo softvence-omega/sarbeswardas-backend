@@ -16,6 +16,7 @@ router.post("/verify-email", auth_controller_1.auth_controller.verify_email);
 router.patch("/change-password", (0, auth_1.default)(), (0, request_validator_1.default)(auth_validation_1.change_password_schema), auth_controller_1.auth_controller.change_password);
 router.post("/forgot-password", auth_controller_1.auth_controller.forgot_password);
 router.post("/reset-password", auth_controller_1.auth_controller.reset_password);
+router.post("/resend-otp", (0, request_validator_1.default)(auth_validation_1.resend_otp_schema), auth_controller_1.auth_controller.resend_otp);
 // router.get("/verify-email", verifyEmail);
 router.post("/log-out-all-device", (0, auth_1.default)(), auth_controller_1.auth_controller.logged_out_all_device);
 router.post("/login-with-google", auth_controller_1.auth_controller.login_user_with_google);

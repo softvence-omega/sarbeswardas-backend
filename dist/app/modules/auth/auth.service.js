@@ -70,7 +70,8 @@ const sign_up_user_into_db = (payload) => __awaiter(void 0, void 0, void 0, func
     </table>
   `;
     yield (0, send_email_1.sendEmail)(email, "Your OTP", emailTemp);
-    return "User register successfully";
+    return null;
+    // return "User register successfully";
 });
 const verify_email_into_db = (payload) => __awaiter(void 0, void 0, void 0, function* () {
     const { email, otp } = payload;
@@ -291,6 +292,36 @@ const delete_account_from_db = (userId) => __awaiter(void 0, void 0, void 0, fun
         throw new app_error_1.AppError(500, "Failed to delete account");
     return updatedUser;
 });
+const resend_otp_into_db = (email) => __awaiter(void 0, void 0, void 0, function* () {
+    const user = yield auth_schema_1.User_Model.findOne({ email });
+    if (!user) {
+        throw new app_error_1.AppError(404, "User not found");
+    }
+    const otp = (0, otp_maker_1.OTPMaker)();
+    const otpExpiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes expiration
+    yield auth_schema_1.User_Model.findOneAndUpdate({ email }, { lastOTP: otp, otpExpiresAt });
+    const otpDigits = otp.split("");
+    const emailTemp = `
+    <table ...>
+      ...
+      <tr>
+        ${otpDigits
+        .map((digit) => `
+            <td align="center" valign="middle"
+              style="background:#f5f3ff; border-radius:12px; width:56px; height:56px;">
+              <div style="font-size:22px; line-height:56px; color:#111827; font-weight:700; text-align:center;">
+                ${digit}
+              </div>
+            </td>
+            <td style="width:12px;">&nbsp;</td>
+          `)
+        .join("")}
+      </tr>
+      ...
+    </table>
+  `;
+    yield (0, send_email_1.sendEmail)(email, "Your OTP", emailTemp);
+});
 exports.auth_service = {
     sign_up_user_into_db,
     verify_email_into_db,
@@ -301,4 +332,5 @@ exports.auth_service = {
     logged_out_all_device_from_db,
     login_user_with_google_from_db,
     delete_account_from_db,
+    resend_otp_into_db,
 };

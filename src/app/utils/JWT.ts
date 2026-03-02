@@ -10,8 +10,8 @@ const generateToken = (payload: object, secret: Secret, expiresIn: string) => {
   return token;
 };
 
-const verifyToken = (token: string, secret: Secret): JwtPayload => {
-  return jwt.verify(token, secret) as JwtPayload;
+const verifyToken = (token: string, secret: Secret): JwtPayloadType => {
+  return jwt.verify(token, secret) as JwtPayloadType;
 };
 
 export const jwtHelpers = {
@@ -24,5 +24,6 @@ export type JwtPayloadType = JwtPayload & {
   iat: number;
   exp: number;
   accountId?: string;
+  deviceId?: string;
 };
 export type JwtTokenType = string | JwtPayloadType | null;

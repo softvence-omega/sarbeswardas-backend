@@ -33,7 +33,7 @@ const sendEmail = (to, subject, html) => __awaiter(void 0, void 0, void 0, funct
     try {
         // 2️⃣ Send the email
         const info = yield transporter.sendMail({
-            from: `"Sarbeswar Das" <${process.env.SMTP_USER}>`,
+            from: `"Cognisphere" <${process.env.SMTP_USER}>`,
             to,
             subject,
             html,
